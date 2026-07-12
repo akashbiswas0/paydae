@@ -43,3 +43,18 @@ See also ../canton-counter/README.md for the DevNet ledger URL + OAuth env.
 - dpm CLI: https://docs.canton.network/sdks-tools/cli-tools/dpm
 - Quickstart: https://docs.canton.network/appdev/quickstart/index.md
 - Deploy to DevNet: https://docs.canton.network/appdev/quickstart/deploy-to-devnet.md
+
+## Devnet — VERIFIED ✅ (2026-07-12)
+
+Full pipeline proven against the Seaport sandbox validator
+(`ledger-api.validator.devnet.sandbox.fivenorth.io`):
+
+1. OIDC client-credentials -> JWT (8h expiry; see `.env`, not committed)
+2. `POST /v2/packages` — uploaded `paydae-hello-0.1.0.dar` (pkg `c15681…86fc`)
+3. `POST /v2/parties` — allocated `PaydaeHello::1220a14c…`
+4. `POST /v2/users/6/rights` — granted actAs/readAs to our user
+5. `POST /v2/commands/submit-and-wait` — created Greeting on-ledger
+6. `POST /v2/state/active-contracts` — read it back:
+   `message: "Hello Canton Devnet from Paydae!"`
+
+Helper: `scripts/devnet.sh` (token, upload, allocate, grant, acs).
