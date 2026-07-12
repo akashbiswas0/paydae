@@ -1,0 +1,12 @@
+sdk-version: 3.5.2
+name: paydae-hello-tests
+version: 0.1.0
+source: daml
+
+dependencies:
+  - daml-prim
+  - daml-stdlib
+  - daml-script
+
+data-dependencies:
+  - ../daml/.daml/dist/paydae-hello-0.1.0.dar

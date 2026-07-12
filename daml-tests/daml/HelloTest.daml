@@ -1,0 +1,24 @@
+module HelloTest where
+
+import DA.Assert ((===))
+import Daml.Script
+import Hello
+
+helloTest : Script ()
+helloTest = do
+  alice <- allocateParty "Alice"
+
+  -- create a Greeting contract
+  greeting <- submit alice do
+    createCmd Greeting with
+      owner = alice
+      message = "Hello, Canton!"
+
+  -- exercise a choice: consume it and create an updated one
+  updated <- submit alice do
+    exerciseCmd greeting Reply with
+      newMessage = "Hello, Devnet!"
+
+  -- verify the new contract state
+  Some c <- queryContractId alice updated
+  c.message === "Hello, Devnet!"
