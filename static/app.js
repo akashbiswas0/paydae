@@ -21,7 +21,11 @@ let busy = false;
 const fmt = (v) => Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const rate = (v) => Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 });
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const who = (partyId) => (partyId || '').split('::')[0].replace('Paydae', '') || partyId;
+const NAMES = { PaydaeCo: 'Paydae Inc.', PaydaeAlice: 'Alice', PaydaeBob: 'Bob' };
+const who = (partyId) => {
+  const hint = (partyId || '').split('::')[0];
+  return NAMES[hint] || hint || partyId;
+};
 
 function toast(msg) {
   const t = document.getElementById('toast');
@@ -49,7 +53,7 @@ async function act(action, payload, btn) {
     toast(`Ledger error: ${err.message}`);
   } finally {
     busy = false;
-    document.querySelectorAll('button[data-act]').forEach((b) => (b.disabled = false));
+    if (state) render(); // restore buttons to their rendered enabled/disabled state
   }
 }
 
