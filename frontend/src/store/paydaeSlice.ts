@@ -9,6 +9,8 @@ interface PaydaeSliceState {
   /** initial load finished */
   loaded: boolean;
   error: string | null;
+  /** Canton transaction id of the last committed action */
+  lastUpdateId: string | null;
 }
 
 const initialState: PaydaeSliceState = {
@@ -17,6 +19,7 @@ const initialState: PaydaeSliceState = {
   busy: false,
   loaded: false,
   error: null,
+  lastUpdateId: null,
 };
 
 export const fetchState = createAsyncThunk<PaydaeState, Persona>(
@@ -30,7 +33,7 @@ export const fetchState = createAsyncThunk<PaydaeState, Persona>(
 );
 
 export const performAction = createAsyncThunk<
-  void,
+  string | null,
   { persona: Persona; action: ActionName; payload?: Record<string, unknown> },
   { rejectValue: string }
 >("paydae/performAction", async ({ persona, action, payload }, { dispatch, rejectWithValue }) => {
@@ -39,9 +42,10 @@ export const performAction = createAsyncThunk<
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ p: persona, action, payload: payload ?? {} }),
   });
-  const body = (await res.json()) as { ok?: boolean; error?: string };
+  const body = (await res.json()) as { ok?: boolean; error?: string; updateId?: string | null };
   if (!res.ok || body.error) return rejectWithValue(body.error ?? `HTTP ${res.status}`);
   await dispatch(fetchState(persona));
+  return body.updateId ?? null;
 });
 
 const paydaeSlice = createSlice({
@@ -56,6 +60,9 @@ const paydaeSlice = createSlice({
     },
     clearError(state) {
       state.error = null;
+    },
+    clearUpdateId(state) {
+      state.lastUpdateId = null;
     },
   },
   extraReducers: (builder) => {
@@ -72,9 +79,11 @@ const paydaeSlice = createSlice({
       .addCase(performAction.pending, (state) => {
         state.busy = true;
         state.error = null;
+        state.lastUpdateId = null;
       })
-      .addCase(performAction.fulfilled, (state) => {
+      .addCase(performAction.fulfilled, (state, action) => {
         state.busy = false;
+        state.lastUpdateId = action.payload;
       })
       .addCase(performAction.rejected, (state, action) => {
         state.busy = false;
@@ -83,5 +92,5 @@ const paydaeSlice = createSlice({
   },
 });
 
-export const { setPersona, clearError } = paydaeSlice.actions;
+export const { setPersona, clearError, clearUpdateId } = paydaeSlice.actions;
 export default paydaeSlice.reducer;

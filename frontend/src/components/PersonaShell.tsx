@@ -5,6 +5,7 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchState, setPersona } from "@/store/paydaeSlice";
 import { PERSONAS, type Persona } from "@/lib/types";
 import { ErrorToast } from "./ErrorToast";
+import { TxToast } from "./TxToast";
 
 const POLL_MS = 2500;
 
@@ -50,6 +51,7 @@ export function PersonaShell({
         </p>
       )}
       <ErrorToast />
+      <TxToast />
     </div>
   );
 }
