@@ -23,17 +23,18 @@ Canton **Devnet** (Seaport sandbox validator, `fivenorth.io`).
 ## Architecture
 
 ```
-┌─────────────────────────┐      ┌─────────────────┐      ┌──────────────────────┐
-│  Browser (static/)      │      │  server.mjs     │      │  JSON Ledger API v2  │
-│  /company  ·  /c/alice  │◄────►│  Node 18+, zero │◄────►│  Devnet validator    │
-│  /c/bob                 │ REST │  npm deps, :4000│ JWT  │  (Canton Network)    │
-│  vanilla HTML/CSS/JS    │      │  holds creds    │      │  paydae DAR + parties│
-└─────────────────────────┘      └─────────────────┘      └──────────────────────┘
+┌──────────────────────────┐      ┌──────────────────┐      ┌──────────────────────┐
+│  frontend/ (Next.js :3000)│      │ backend/ (:4000) │      │  JSON Ledger API v2  │
+│  /company  ·  /c/alice   │◄────►│  Express + TS    │◄────►│  Devnet validator    │
+│  /c/bob                  │ REST │  holds creds,    │ JWT  │  (Canton Network)    │
+│  TS · Tailwind · shadcn  │proxy │  talks to ledger │      │  paydae DAR + parties│
+│  Redux Toolkit           │      │                  │      │                      │
+└──────────────────────────┘      └──────────────────┘      └──────────────────────┘
 ```
 
 - **Daml** ([daml/daml/Paydae.daml](daml/daml/Paydae.daml)): `AgreementProposal → Agreement → Invoice → ApprovedInvoice → Payment`, plus `Treasury` with the atomic `PayAllApproved` choice.
-- **Backend** ([server.mjs](server.mjs)): zero-dependency Node server. Mints and caches the OIDC JWT (re-mints on 401 / >7h), translates persona REST calls into ledger commands/ACS queries. The browser never sees credentials.
-- **Frontend** ([static/](static/)): no libraries, dark theme, one page per persona with a big colored badge (company amber, Alice teal, Bob violet). Polls state every 2.5 s.
+- **Backend** ([backend/](backend/src/index.ts)): Express + TypeScript (100 % TS, run with `tsx`). Mints and caches the OIDC JWT (re-mints on 401 / >7h), translates persona REST calls (`GET /api/state`, `POST /api/action`) into ledger commands/ACS queries. The browser never sees credentials.
+- **Frontend** ([frontend/](frontend/src/app)): Next.js (App Router) + TypeScript + Tailwind CSS + shadcn/ui + Redux Toolkit. Dark theme, one route per persona with a big colored badge (company amber, Alice teal, Bob violet). Polls state every 2.5 s through a Redux async thunk; `/api/*` is rewritten to the Express backend so the browser stays same-origin.
 
 ## Privacy matrix (who sees what)
 
@@ -59,7 +60,7 @@ where its parties are stakeholders. There is no server-side filtering to get wro
 ## Setup
 
 Prereqs: `dpm` 3.5.2, JDK 21, Node 18+, and a `.env` (never committed) with
-`AUTH_URL`, `CLIENT_ID`, `CLIENT_SECRET`, `LEDGER_API`.
+`AUTH_URL`, `CLIENT_ID`, `CLIENT_SECRET`, `LEDGER_API` at the repo root.
 
 ```bash
 # 1. build + test the Daml package
@@ -72,9 +73,13 @@ cd ../daml-tests && dpm build && dpm test   # happy path, privacy, negatives
 ./scripts/devnet.sh grant 6 <party-id>       # actAs+readAs for the ledger user
 # record package id + party ids in config.json
 
-# 3. run the app
-node server.mjs                              # http://localhost:4000
-# open /company, /c/alice, /c/bob in three tabs
+# 3. run the app (two terminals)
+cd backend && npm install && npm run dev     # Express API on http://localhost:4000
+cd frontend && npm install && npm run dev    # Next.js UI on http://localhost:3000
+# open localhost:3000/company, /c/alice, /c/bob in three tabs
+
+# optional: wipe all Paydae contracts for a fresh demo run
+node scripts/reset.mjs
 ```
 
 ## Devnet proof
@@ -86,9 +91,10 @@ node server.mjs                              # http://localhost:4000
   - `PaydaeAlice::1220a14ca128063b8dc9d1ebb0bd22633be9f2168500f4dbc1ecaeb1855b14e5acf8`
   - `PaydaeBob::1220a14ca128063b8dc9d1ebb0bd22633be9f2168500f4dbc1ecaeb1855b14e5acf8`
 - Ledger user: `6` (see [config.json](config.json))
-- Verified 2026-07-12 in a real-browser e2e run: treasury bootstrapped at $50,000;
-  offers (Designer $70/h, Engineer $85/h) countersigned; invoices 40 h ($2,800) and
-  10 h ($850) approved; one `PayAllApproved` debited exactly $3,650 → $46,350; both
+- Verified 2026-07-12 in a real-browser e2e run (and re-verified 2026-07-13 on the
+  Next.js + Express stack): treasury bootstrapped at $50,000; offers (Designer
+  $70/h, Engineer $85/h) countersigned; invoices 40 h ($2,800) and 10 h ($850)
+  approved; one `PayAllApproved` debited exactly $3,650 → $46,350; both
   contractors saw *Paid ✓* and never each other's data.
 
 ## Repo layout
@@ -96,8 +102,8 @@ node server.mjs                              # http://localhost:4000
 ```
 daml/            Daml package "paydae" (the shipped DAR)
 daml-tests/      Daml Script tests (separate so the DAR has no script dependency)
-scripts/         devnet.sh — token / upload / allocate / grant / acs helpers
-server.mjs       zero-dependency backend + static file server
-static/          persona picker + company/contractor UIs
+scripts/         devnet.sh helpers + reset.mjs (archive all contracts for a clean demo)
+backend/         Express + TypeScript API (JWT, ledger reads/writes)
+frontend/        Next.js + TypeScript + Tailwind + shadcn/ui + Redux Toolkit UI
 config.json      package id, party ids, ledger user
 ```
