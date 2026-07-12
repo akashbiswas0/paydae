@@ -1,0 +1,113 @@
+module Paydae where
+
+import DA.Foldable (forA_)
+
+-- | Company offers terms; only the named contractor can see (and accept) it.
+template AgreementProposal
+  with
+    company : Party
+    contractor : Party
+    role : Text
+    hourlyRate : Decimal
+    currency : Text
+  where
+    signatory company
+    observer contractor
+
+    choice Countersign : ContractId Agreement
+      controller contractor
+      do create Agreement with ..
+
+    choice Withdraw : ()
+      controller company
+      do pure ()
+
+-- | Dual-signed engagement. Carries both authorities, so invoicing off it
+-- can bind company and contractor in one step.
+template Agreement
+  with
+    company : Party
+    contractor : Party
+    role : Text
+    hourlyRate : Decimal
+    currency : Text
+  where
+    signatory company, contractor
+
+    nonconsuming choice SubmitInvoice : ContractId Invoice
+      with
+        hours : Decimal
+        memo : Text
+      controller contractor
+      do create Invoice with
+           company
+           contractor
+           amount = hours * hourlyRate
+           currency
+           hours
+           memo
+
+template Invoice
+  with
+    company : Party
+    contractor : Party
+    amount : Decimal
+    currency : Text
+    hours : Decimal
+    memo : Text
+  where
+    signatory company, contractor
+
+    choice Approve : ContractId ApprovedInvoice
+      controller company
+      do create ApprovedInvoice with ..
+
+template ApprovedInvoice
+  with
+    company : Party
+    contractor : Party
+    amount : Decimal
+    currency : Text
+    hours : Decimal
+    memo : Text
+  where
+    signatory company, contractor
+
+    -- Treasury cannot plain-archive a dual-signed contract; payday consumes
+    -- approved invoices by exercising this company-controlled choice.
+    choice MarkPaid : ContractId Payment
+      controller company
+      do create Payment with ..
+
+template Payment
+  with
+    company : Party
+    contractor : Party
+    amount : Decimal
+    currency : Text
+    memo : Text
+  where
+    signatory company
+    observer contractor
+
+template Treasury
+  with
+    company : Party
+    balance : Decimal
+    currency : Text
+  where
+    signatory company
+
+    -- One exercise = atomic payday: every invoice paid and the balance
+    -- debited in a single transaction, or nothing happens at all.
+    choice PayAllApproved : ContractId Treasury
+      with
+        invoiceCids : [ContractId ApprovedInvoice]
+      controller company
+      do invoices <- mapA fetch invoiceCids
+         forA_ invoices $ \inv ->
+           assertMsg "invoice does not belong to this company" (inv.company == company)
+         let total = sum (map (\inv -> inv.amount) invoices)
+         assertMsg "insufficient treasury balance" (total <= balance)
+         forA_ invoiceCids $ \cid -> exercise cid MarkPaid
+         create this with balance = balance - total

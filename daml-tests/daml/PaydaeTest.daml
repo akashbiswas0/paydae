@@ -1,0 +1,127 @@
+module PaydaeTest where
+
+import DA.Assert ((===))
+import Daml.Script
+import Paydae
+
+data Fixture = Fixture with
+  company : Party
+  alice : Party
+  bob : Party
+
+setup : Script Fixture
+setup = do
+  company <- allocateParty "PaydaeCo"
+  alice <- allocateParty "Alice"
+  bob <- allocateParty "Bob"
+  pure Fixture with ..
+
+-- Happy path: two contractors onboarded, invoiced, approved, paid atomically.
+happyPathTest : Script ()
+happyPathTest = do
+  Fixture{..} <- setup
+
+  treasury <- submit company do
+    createCmd Treasury with company; balance = 50000.0; currency = "USD"
+
+  aliceProposal <- submit company do
+    createCmd AgreementProposal with
+      company; contractor = alice; role = "Designer"
+      hourlyRate = 70.0; currency = "USD"
+  bobProposal <- submit company do
+    createCmd AgreementProposal with
+      company; contractor = bob; role = "Engineer"
+      hourlyRate = 85.0; currency = "USD"
+
+  aliceAgreement <- submit alice do exerciseCmd aliceProposal Countersign
+  bobAgreement <- submit bob do exerciseCmd bobProposal Countersign
+
+  aliceInvoice <- submit alice do
+    exerciseCmd aliceAgreement SubmitInvoice with hours = 40.0; memo = "June design work"
+  bobInvoice <- submit bob do
+    exerciseCmd bobAgreement SubmitInvoice with hours = 10.0; memo = "API integration"
+
+  Some aliceInv <- queryContractId alice aliceInvoice
+  aliceInv.amount === 2800.0
+  Some bobInv <- queryContractId bob bobInvoice
+  bobInv.amount === 850.0
+
+  aliceApproved <- submit company do exerciseCmd aliceInvoice Approve
+  bobApproved <- submit company do exerciseCmd bobInvoice Approve
+
+  -- one atomic payday
+  newTreasury <- submit company do
+    exerciseCmd treasury PayAllApproved with invoiceCids = [aliceApproved, bobApproved]
+
+  Some t <- queryContractId company newTreasury
+  t.balance === 46350.0
+
+  payments <- query @Payment company
+  length payments === 2
+  alicePayments <- query @Payment alice
+  map (\(_, p) -> p.amount) alicePayments === [2800.0]
+  bobPayments <- query @Payment bob
+  map (\(_, p) -> p.amount) bobPayments === [850.0]
+
+-- Privacy: Canton only distributes contracts to stakeholders. Bob can never
+-- see Alice's agreement; Alice can never see Bob's payment.
+privacyTest : Script ()
+privacyTest = do
+  Fixture{..} <- setup
+
+  aliceProposal <- submit company do
+    createCmd AgreementProposal with
+      company; contractor = alice; role = "Designer"
+      hourlyRate = 70.0; currency = "USD"
+  bobProposal <- submit company do
+    createCmd AgreementProposal with
+      company; contractor = bob; role = "Engineer"
+      hourlyRate = 85.0; currency = "USD"
+
+  aliceAgreement <- submit alice do exerciseCmd aliceProposal Countersign
+  bobAgreement <- submit bob do exerciseCmd bobProposal Countersign
+
+  bobViewOfAliceAgreement <- queryContractId bob aliceAgreement
+  bobViewOfAliceAgreement === None
+
+  bobInvoice <- submit bob do
+    exerciseCmd bobAgreement SubmitInvoice with hours = 10.0; memo = "API integration"
+  bobApproved <- submit company do exerciseCmd bobInvoice Approve
+  bobPayment <- submit company do exerciseCmd bobApproved MarkPaid
+
+  aliceViewOfBobPayment <- queryContractId alice bobPayment
+  aliceViewOfBobPayment === None
+
+-- Negative: payday must fail atomically when the treasury can't cover it.
+insufficientBalanceTest : Script ()
+insufficientBalanceTest = do
+  Fixture{..} <- setup
+
+  treasury <- submit company do
+    createCmd Treasury with company; balance = 1000.0; currency = "USD"
+  proposal <- submit company do
+    createCmd AgreementProposal with
+      company; contractor = alice; role = "Designer"
+      hourlyRate = 70.0; currency = "USD"
+  engagement <- submit alice do exerciseCmd proposal Countersign
+  invoice <- submit alice do
+    exerciseCmd engagement SubmitInvoice with hours = 40.0; memo = "June design work"
+  approved <- submit company do exerciseCmd invoice Approve
+
+  submitMustFail company do
+    exerciseCmd treasury PayAllApproved with invoiceCids = [approved]
+
+-- Negative: only the company can approve an invoice.
+contractorCannotApproveTest : Script ()
+contractorCannotApproveTest = do
+  Fixture{..} <- setup
+
+  proposal <- submit company do
+    createCmd AgreementProposal with
+      company; contractor = alice; role = "Designer"
+      hourlyRate = 70.0; currency = "USD"
+  engagement <- submit alice do exerciseCmd proposal Countersign
+  invoice <- submit alice do
+    exerciseCmd engagement SubmitInvoice with hours = 40.0; memo = "June design work"
+
+  submitMustFail alice do exerciseCmd invoice Approve
