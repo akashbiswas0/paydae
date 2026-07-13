@@ -109,6 +109,62 @@ interface SignResult {
   signedBy?: string;
 }
 
+const HOLDING_INTERFACE_ID =
+  "#splice-api-token-holding-v1:Splice.Api.Token.HoldingV1:Holding";
+
+interface AcsRow {
+  contractEntry?: {
+    JsActiveContract?: {
+      createdEvent?: { interfaceViews?: { viewValue?: { amount?: string; lock?: unknown } }[] };
+    };
+  };
+}
+
+/** Real Canton Coin (Amulet) balance of a party, read through the gateway's
+ * ledger passthrough as unlocked Token Standard holdings. */
+export async function ccBalance(party: string): Promise<number> {
+  await ensureSessions();
+  const end = await dapp<{ offset: number }>("ledgerApi", {
+    requestMethod: "get",
+    resource: "/v2/state/ledger-end",
+  });
+  const rows = await dapp<AcsRow[] | null>("ledgerApi", {
+    requestMethod: "post",
+    resource: "/v2/state/active-contracts",
+    body: {
+      activeAtOffset: end.offset,
+      verbose: false,
+      filter: {
+        filtersByParty: {
+          [party]: {
+            cumulative: [
+              {
+                identifierFilter: {
+                  InterfaceFilter: {
+                    value: {
+                      interfaceId: HOLDING_INTERFACE_ID,
+                      includeInterfaceView: true,
+                      includeCreatedEventBlob: false,
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        },
+      },
+    },
+  });
+  let total = 0;
+  for (const row of rows ?? []) {
+    for (const view of row.contractEntry?.JsActiveContract?.createdEvent?.interfaceViews ?? []) {
+      const amount = Number(view.viewValue?.amount);
+      if (Number.isFinite(amount) && !view.viewValue?.lock) total += amount;
+    }
+  }
+  return total;
+}
+
 /**
  * Exercise a choice as the wallet party: gateway prepares the transaction,
  * the wallet key signs its hash, and the gateway submits it via Canton

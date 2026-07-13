@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import type { Persona } from "@/lib/types";
 import { WALLET_MODE } from "./config";
-import { clearWalletError, connectWallet, fetchWalletState } from "./walletSlice";
+import { clearWalletError, connectWallet, fetchCcBalance, fetchWalletState } from "./walletSlice";
 
 const POLL_MS = 2500;
 
@@ -21,11 +21,16 @@ export function WalletCard({ persona }: { persona: Persona }) {
   const status = useAppSelector((s) => s.wallet.status);
   const account = useAppSelector((s) => s.wallet.account);
   const error = useAppSelector((s) => s.wallet.error);
+  const cc = useAppSelector((s) => s.wallet.ccBalance);
 
   useEffect(() => {
     if (status !== "connected") return;
-    dispatch(fetchWalletState(persona));
-    const timer = setInterval(() => dispatch(fetchWalletState(persona)), POLL_MS);
+    const poll = () => {
+      dispatch(fetchWalletState(persona));
+      dispatch(fetchCcBalance());
+    };
+    poll();
+    const timer = setInterval(poll, POLL_MS);
     return () => clearInterval(timer);
   }, [dispatch, persona, status]);
 
@@ -64,9 +69,19 @@ export function WalletCard({ persona }: { persona: Persona }) {
           )}
         </div>
         {status === "connected" ? (
-          <span className="shrink-0 rounded-md bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-400">
-            wallet-signed
-          </span>
+          <div className="flex shrink-0 items-center gap-2">
+            {cc !== null ? (
+              <span
+                className="rounded-md bg-amber-500/15 px-2.5 py-1 text-xs font-semibold text-amber-400"
+                title="Real Canton Coin (Amulet) held by this wallet on devnet"
+              >
+                {cc.toLocaleString("en-US", { maximumFractionDigits: 2 })} CC
+              </span>
+            ) : null}
+            <span className="rounded-md bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-400">
+              wallet-signed
+            </span>
+          </div>
         ) : (
           <Button
             size="sm"

@@ -1,7 +1,7 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { PaydaeState, Persona } from "@/lib/types";
 import { performAction } from "@/store/paydaeSlice";
-import { connect, exerciseChoice, type WalletAccount } from "./adapter";
+import { ccBalance, connect, exerciseChoice, type WalletAccount } from "./adapter";
 
 export type WalletActionName = "countersign" | "submitInvoice";
 
@@ -23,6 +23,8 @@ interface WalletSliceState {
   account: WalletAccount | null;
   /** contractor state read as the wallet party (overrides the custodial view) */
   data: PaydaeState | null;
+  /** real Canton Coin (Amulet) balance of the wallet party, if known */
+  ccBalance: number | null;
   pendingSign: PendingSign | null;
   /** a sign+submit is in flight */
   signing: boolean;
@@ -33,6 +35,7 @@ const initialState: WalletSliceState = {
   status: "disconnected",
   account: null,
   data: null,
+  ccBalance: null,
   pendingSign: null,
   signing: false,
   error: null,
@@ -62,6 +65,16 @@ export const fetchWalletState = createAsyncThunk<
   const body = (await res.json()) as PaydaeState & { error?: string };
   if (!res.ok || body.error) throw new Error(body.error ?? `HTTP ${res.status}`);
   return body;
+});
+
+export const fetchCcBalance = createAsyncThunk<
+  number | null,
+  void,
+  { state: { wallet: WalletSliceState } }
+>("wallet/fetchCcBalance", async (_, { getState }) => {
+  const party = getState().wallet.account?.party;
+  if (!party) return null;
+  return ccBalance(party);
 });
 
 /** "Sign & submit" in the SignModal: sign through the wallet session, then
@@ -125,6 +138,9 @@ const walletSlice = createSlice({
       .addCase(connectWallet.rejected, (state, action) => {
         state.status = "disconnected";
         state.error = action.payload ?? action.error.message ?? "wallet connection failed";
+      })
+      .addCase(fetchCcBalance.fulfilled, (state, action) => {
+        if (action.payload !== null) state.ccBalance = action.payload;
       })
       .addCase(fetchWalletState.fulfilled, (state, action) => {
         if (!action.payload) return;
