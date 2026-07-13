@@ -9,16 +9,34 @@ import { performAction } from "@/store/paydaeSlice";
 import { formatMoney, formatRate, partyName, type Persona } from "@/lib/types";
 import { EmptyNote, ItemRow, StatusChip } from "./ItemRow";
 import { SectionCard } from "./SectionCard";
+// wallet-integration: wallet mode (flag-gated) — components + routing live in src/wallet/
+import { SignModal } from "@/wallet/SignModal";
+import { WalletCard } from "@/wallet/WalletCard";
+import { useContractorWallet } from "@/wallet/useContractorWallet";
 
 export function ContractorView({ persona }: { persona: Persona }) {
   const dispatch = useAppDispatch();
-  const data = useAppSelector((s) => s.paydae.data);
-  const busy = useAppSelector((s) => s.paydae.busy);
+  const custodialData = useAppSelector((s) => s.paydae.data);
+  const custodialBusy = useAppSelector((s) => s.paydae.busy);
 
   const [hours, setHours] = useState("");
   const [memo, setMemo] = useState("");
 
-  if (!data) return null;
+  // wallet-integration: when a wallet is connected, read the WALLET party's state
+  // and route Countersign / SubmitInvoice through the SignModal
+  const wallet = useContractorWallet();
+  const data = wallet.active ? wallet.data : custodialData;
+  const busy = wallet.active ? wallet.busy : custodialBusy;
+
+  if (!data) {
+    // wallet-integration: keep the wallet panel reachable before first wallet poll
+    return wallet.active || custodialData === null ? (
+      <>
+        <WalletCard persona={persona} />
+        <SignModal persona={persona} />
+      </>
+    ) : null;
+  }
   const agreement = data.agreements[0];
   const computed = agreement ? Number(hours) * Number(agreement.hourlyRate ?? 0) : 0;
   const invoices = [
@@ -28,6 +46,9 @@ export function ContractorView({ persona }: { persona: Persona }) {
 
   return (
     <>
+      {/* wallet-integration: wallet panel + review-and-sign modal (null when flag off) */}
+      <WalletCard persona={persona} />
+      <SignModal persona={persona} />
       <SectionCard title="Offers">
         {data.proposals.length ? (
           data.proposals.map((offer) => (
@@ -41,13 +62,16 @@ export function ContractorView({ persona }: { persona: Persona }) {
                   className="bg-emerald-500 text-zinc-950 hover:bg-emerald-400"
                   disabled={busy}
                   onClick={() =>
-                    dispatch(
-                      performAction({
-                        persona,
-                        action: "countersign",
-                        payload: { cid: offer.contractId },
-                      }),
-                    )
+                    // wallet-integration: wallet-signed countersign (modal) when connected
+                    wallet.active
+                      ? wallet.requestCountersign(offer)
+                      : dispatch(
+                          performAction({
+                            persona,
+                            action: "countersign",
+                            payload: { cid: offer.contractId },
+                          }),
+                        )
                   }
                 >
                   Countersign
@@ -93,8 +117,13 @@ export function ContractorView({ persona }: { persona: Persona }) {
               </p>
               <Button
                 disabled={busy || !Number(hours)}
-                onClick={() =>
-                  dispatch(
+                onClick={() => {
+                  // wallet-integration: wallet-signed invoice (modal) when connected
+                  if (wallet.active) {
+                    wallet.requestSubmitInvoice(agreement, Number(hours), memo.trim());
+                    return;
+                  }
+                  void dispatch(
                     performAction({
                       persona,
                       action: "submitInvoice",
@@ -107,8 +136,8 @@ export function ContractorView({ persona }: { persona: Persona }) {
                   ).then(() => {
                     setHours("");
                     setMemo("");
-                  })
-                }
+                  });
+                }}
               >
                 Submit invoice
               </Button>
