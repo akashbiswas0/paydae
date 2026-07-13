@@ -1,0 +1,14 @@
+{
+  "name": "paydae-wallet-gateway",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "devnet": "./start-devnet.sh"
+  },
+  "dependencies": {
+    "@canton-network/dapp-sdk": "1.4.0",
+    "@canton-network/wallet-gateway-remote": "1.4.0",
+    "@canton-network/wallet-sdk": "1.4.0"
+  }
+}
