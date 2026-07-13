@@ -97,6 +97,19 @@ node scripts/reset.mjs
   approved; one `PayAllApproved` debited exactly $3,650 → $46,350; both
   contractors saw *Paid ✓* and never each other's data.
 
+## Wallet mode (branch: `wallets-external`)
+
+The `wallets-external` branch adds a second, flag-gated trust model: contractors
+connect a **Canton wallet** (official `@canton-network` Wallet Gateway) and sign
+Countersign / SubmitInvoice with **their own ed25519 key** — new external
+parties the company's credentials provably cannot forge (ledger rejects the
+attempt with PERMISSION_DENIED). A "Review & sign" modal gates every wallet
+action, and the stretch goal is live too: payday settles **real Canton Coin**
+on devnet into the contractors' wallets. With the flags off, the app is exactly
+this custodial version. See [wallet/README.md](wallet/README.md) (architecture,
+run instructions, custody model) and [wallet/E2E.md](wallet/E2E.md) (devnet
+proof: updateIds for every step).
+
 ## Repo layout
 
 ```
