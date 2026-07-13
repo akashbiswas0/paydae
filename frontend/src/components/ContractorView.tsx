@@ -10,7 +10,6 @@ import { formatMoney, formatRate, partyName, type Persona } from "@/lib/types";
 import { EmptyNote, ItemRow, StatusChip } from "./ItemRow";
 import { SectionCard } from "./SectionCard";
 // wallet-integration: wallet mode (flag-gated) — components + routing live in src/wallet/
-import { SignModal } from "@/wallet/SignModal";
 import { WalletCard } from "@/wallet/WalletCard";
 import { useContractorWallet } from "@/wallet/useContractorWallet";
 
@@ -23,19 +22,14 @@ export function ContractorView({ persona }: { persona: Persona }) {
   const [memo, setMemo] = useState("");
 
   // wallet-integration: when a wallet is connected, read the WALLET party's state
-  // and route Countersign / SubmitInvoice through the SignModal
-  const wallet = useContractorWallet();
+  // and route Countersign / SubmitInvoice through the wallet (gateway approve popup)
+  const wallet = useContractorWallet(persona);
   const data = wallet.active ? wallet.data : custodialData;
   const busy = wallet.active ? wallet.busy : custodialBusy;
 
   if (!data) {
     // wallet-integration: keep the wallet panel reachable before first wallet poll
-    return wallet.active || custodialData === null ? (
-      <>
-        <WalletCard persona={persona} />
-        <SignModal persona={persona} />
-      </>
-    ) : null;
+    return wallet.active || custodialData === null ? <WalletCard persona={persona} /> : null;
   }
   const agreement = data.agreements[0];
   const computed = agreement ? Number(hours) * Number(agreement.hourlyRate ?? 0) : 0;
@@ -46,9 +40,8 @@ export function ContractorView({ persona }: { persona: Persona }) {
 
   return (
     <>
-      {/* wallet-integration: wallet panel + review-and-sign modal (null when flag off) */}
+      {/* wallet-integration: wallet panel (null when flag off) */}
       <WalletCard persona={persona} />
-      <SignModal persona={persona} />
       <SectionCard title="Offers">
         {data.proposals.length ? (
           data.proposals.map((offer) => (
@@ -62,9 +55,9 @@ export function ContractorView({ persona }: { persona: Persona }) {
                   className="bg-emerald-500 text-zinc-950 hover:bg-emerald-400"
                   disabled={busy}
                   onClick={() =>
-                    // wallet-integration: wallet-signed countersign (modal) when connected
+                    // wallet-integration: wallet-signed countersign (gateway popup) when connected
                     wallet.active
-                      ? wallet.requestCountersign(offer)
+                      ? wallet.countersign(offer)
                       : dispatch(
                           performAction({
                             persona,
@@ -118,9 +111,9 @@ export function ContractorView({ persona }: { persona: Persona }) {
               <Button
                 disabled={busy || !Number(hours)}
                 onClick={() => {
-                  // wallet-integration: wallet-signed invoice (modal) when connected
+                  // wallet-integration: wallet-signed invoice (gateway popup) when connected
                   if (wallet.active) {
-                    wallet.requestSubmitInvoice(agreement, Number(hours), memo.trim());
+                    wallet.submitInvoice(agreement, Number(hours), memo.trim());
                     return;
                   }
                   void dispatch(

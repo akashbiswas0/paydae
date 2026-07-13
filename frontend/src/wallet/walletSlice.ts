@@ -1,17 +1,14 @@
-import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
+import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import type { PaydaeState, Persona } from "@/lib/types";
 import { performAction } from "@/store/paydaeSlice";
-import { ccBalance, connect, exerciseChoice, type WalletAccount } from "./adapter";
+import { ccBalance, connect, exerciseChoice, onSessionLost, type WalletAccount } from "./adapter";
 
 export type WalletActionName = "countersign" | "submitInvoice";
 
-export interface PendingSign {
-  /** human summary shown in the SignModal, e.g. "Countersign: Designer · $70/h from Paydae Inc." */
-  summary: string;
-  /** optional second line (amount breakdown etc.) */
-  detail: string | null;
+/** A wallet exercise: reviewed and signed by the user in the GATEWAY's approve
+ * popup (opened by the dapp-sdk), not in an in-app modal. */
+export interface WalletExerciseInput {
   action: WalletActionName;
-  /** ledger target: entity + contract + choice argument */
   entity: string;
   contractId: string;
   choice: string;
@@ -25,8 +22,7 @@ interface WalletSliceState {
   data: PaydaeState | null;
   /** real Canton Coin (Amulet) balance of the wallet party, if known */
   ccBalance: number | null;
-  pendingSign: PendingSign | null;
-  /** a sign+submit is in flight */
+  /** an exercise is awaiting approval in the gateway popup / in flight */
   signing: boolean;
   error: string | null;
 }
@@ -36,16 +32,17 @@ const initialState: WalletSliceState = {
   account: null,
   data: null,
   ccBalance: null,
-  pendingSign: null,
   signing: false,
   error: null,
 };
 
 export const connectWallet = createAsyncThunk<WalletAccount, Persona, { rejectValue: string }>(
   "wallet/connect",
-  async (persona, { rejectWithValue }) => {
+  async (persona, { dispatch, rejectWithValue }) => {
     try {
-      return await connect(persona);
+      const account = await connect(persona);
+      onSessionLost(() => dispatch(walletSlice.actions.disconnectWallet()));
+      return account;
     } catch (err) {
       return rejectWithValue(err instanceof Error ? err.message : String(err));
     }
@@ -77,47 +74,41 @@ export const fetchCcBalance = createAsyncThunk<
   return ccBalance(party);
 });
 
-/** "Sign & submit" in the SignModal: sign through the wallet session, then
- * reuse the existing TxToast by fulfilling the custodial action thunk. */
-export const walletExercise = createAsyncThunk<string, Persona, { state: { wallet: WalletSliceState }; rejectValue: string }>(
-  "wallet/exercise",
-  async (persona, { getState, dispatch, rejectWithValue }) => {
-    const { account, pendingSign } = getState().wallet;
-    if (!account || !pendingSign) return rejectWithValue("nothing to sign");
-    try {
-      const updateId = await exerciseChoice(
-        account.party,
-        pendingSign.entity,
-        pendingSign.contractId,
-        pendingSign.choice,
-        pendingSign.argument,
-      );
-      // surface the committed tx in the shared TxToast (reads paydae.lastUpdateId)
-      dispatch(
-        performAction.fulfilled(updateId, `wallet-${pendingSign.action}`, {
-          persona,
-          action: pendingSign.action,
-        }),
-      );
-      void dispatch(fetchWalletState(persona));
-      return updateId;
-    } catch (err) {
-      return rejectWithValue(err instanceof Error ? err.message : String(err));
-    }
-  },
-);
+/** Run a wallet exercise: the gateway's approve popup opens for review + key
+ * signing; on commit we reuse the existing TxToast via the custodial thunk. */
+export const walletExercise = createAsyncThunk<
+  string,
+  { persona: Persona; input: WalletExerciseInput },
+  { state: { wallet: WalletSliceState }; rejectValue: string }
+>("wallet/exercise", async ({ persona, input }, { getState, dispatch, rejectWithValue }) => {
+  const { account } = getState().wallet;
+  if (!account) return rejectWithValue("connect a wallet first");
+  try {
+    const updateId = await exerciseChoice(
+      account.party,
+      input.entity,
+      input.contractId,
+      input.choice,
+      input.argument,
+    );
+    // surface the committed tx in the shared TxToast (reads paydae.lastUpdateId)
+    dispatch(
+      performAction.fulfilled(updateId, `wallet-${input.action}`, {
+        persona,
+        action: input.action,
+      }),
+    );
+    void dispatch(fetchWalletState(persona));
+    return updateId;
+  } catch (err) {
+    return rejectWithValue(err instanceof Error ? err.message : String(err));
+  }
+});
 
 const walletSlice = createSlice({
   name: "wallet",
   initialState,
   reducers: {
-    requestSign(state, action: PayloadAction<PendingSign>) {
-      state.pendingSign = action.payload;
-      state.error = null;
-    },
-    rejectSign(state) {
-      state.pendingSign = null;
-    },
     clearWalletError(state) {
       state.error = null;
     },
@@ -154,15 +145,13 @@ const walletSlice = createSlice({
       })
       .addCase(walletExercise.fulfilled, (state) => {
         state.signing = false;
-        state.pendingSign = null;
       })
       .addCase(walletExercise.rejected, (state, action) => {
         state.signing = false;
-        state.pendingSign = null;
         state.error = action.payload ?? action.error.message ?? "wallet signing failed";
       });
   },
 });
 
-export const { requestSign, rejectSign, clearWalletError, disconnectWallet } = walletSlice.actions;
+export const { clearWalletError, disconnectWallet } = walletSlice.actions;
 export default walletSlice.reducer;

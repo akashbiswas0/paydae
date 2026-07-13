@@ -43,3 +43,26 @@ Paid ✓ ($2,800 / $850).
   pages show the custodial parties' state, `&party=` override is ignored, and
   company propose targets `PaydaeAlice::…` (curl-verified; test proposal
   archived afterwards).
+
+## Reference-UX rework (dapp-sdk popups + manual onboarding), same day
+
+The flow was reworked to match DA's quickstart dApp UX (reference:
+github.com/akashbiswas0/canton-start) and re-verified in real Chrome:
+
+- **Manual onboarding**: created wallet `PaydaeBobW2` by hand in Bob's gateway
+  web UI (:3031 → "Wallet Onboarding" network → Parties → + New → wallet-kernel)
+  → "Party created" toast; party
+  `PaydaeBobW2::1220e736e395ad88b0cda789334202717982072b3ef17d9c8049b377110f0b525e40`
+  allocated on devnet; `mirror-watch` auto-updated `parties.json`.
+- **Connect**: dApp "Connect wallet" → dapp-sdk wallet picker ("Paydae Wallet
+  Gateway") → gateway login popup (network select + Client ID) → connected;
+  session restore works on reconnect.
+- **Wallet-signed exercises via the gateway approve popup**: Countersign and
+  SubmitInvoice (10h "API integration", Amount 850 shown in Activity Details)
+  both reviewed + approved in the gateway popup, committed on devnet
+  (agreement active, invoice pending in-app afterwards).
+- Alice reconnected the same way on her gateway (:3030): PaydaeAliceW with the
+  2,800 CC badge and her $2,800 Paid ✓ history intact.
+- The earlier SignModal was removed; review + signing now happen in the
+  gateway's own approve page (`/approve/…&closeafteraction`), exactly like the
+  reference app.

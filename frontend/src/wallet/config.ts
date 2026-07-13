@@ -3,24 +3,18 @@
 
 export const WALLET_MODE = process.env.NEXT_PUBLIC_WALLET_MODE === "1";
 
-export const GATEWAY_URL =
-  process.env.NEXT_PUBLIC_WALLET_GATEWAY_URL ?? "http://localhost:3030";
-
-export const NETWORK_ID = "canton:da-devnet";
-
 /**
- * Gateway users (self-signed demo IDP, see wallet/README.md "Sandbox quirks"):
- * onboarding/listing runs as the dedicated user, prepare/sign/execute as the
- * submitter user the auth proxy's m2m token maps to.
+ * One Wallet Gateway instance per contractor (each holds that contractor's
+ * wallet + signing keys): alice :3030, bob :3031. Base URLs — the adapter
+ * appends /api/v0/dapp.
  */
-export const ONBOARD_USER = "paydae-wallet";
-export const SUBMIT_USER = "6";
-
-/** Party hints of the pre-onboarded contractor wallets (wallet/onboard.mjs). */
-export const WALLET_HINTS: Record<string, string> = {
-  alice: "PaydaeAliceW",
-  bob: "PaydaeBobW",
+export const GATEWAY_URLS: Record<string, string> = {
+  alice: process.env.NEXT_PUBLIC_WALLET_GATEWAY_URL ?? "http://localhost:3030",
+  bob: process.env.NEXT_PUBLIC_WALLET_GATEWAY_URL_BOB ?? "http://localhost:3031",
 };
+
+/** Must equal the main network id in the gateway configs (bootstrap.networks[].id). */
+export const NETWORK_ID = "canton:da-devnet";
 
 /** Same package id as config.json at the repo root (committed, stable). */
 export const PACKAGE_ID =

@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# Starts the Paydae wallet stack: auth-injecting proxy (127.0.0.1:9000) +
-# Canton Wallet Gateway (localhost:3030).
+# Starts the Paydae wallet stack:
+#   - auth-injecting proxy           127.0.0.1:9000
+#   - Alice's Wallet Gateway         localhost:3030
+#   - Bob's Wallet Gateway           localhost:3031
+#   - mirror-watch (sandbox glue for manual onboarding, see README)
 #
 # Vendored from https://github.com/akashbiswas0/canton-start (quickstart/gateway/
 # start-devnet.sh), derived from Digital Asset's canton-network-quickstart.
@@ -18,6 +21,10 @@ fi
 
 node devnet-proxy.mjs &
 PROXY_PID=$!
-trap 'kill "$PROXY_PID" 2>/dev/null' EXIT
+node mirror-watch.mjs &
+WATCH_PID=$!
+node_modules/.bin/wallet-gateway -c ./config.fivenorth-devnet-bob.json &
+BOB_PID=$!
+trap 'kill "$PROXY_PID" "$WATCH_PID" "$BOB_PID" 2>/dev/null' EXIT
 
 exec node_modules/.bin/wallet-gateway -c ./config.fivenorth-devnet.json

@@ -63,7 +63,7 @@ export function WalletCard({ persona }: { persona: Persona }) {
             <div>
               <div className="text-[15px] font-bold">Canton wallet</div>
               <div className="text-[13px] text-muted-foreground">
-                Sign your own transactions — no custodial keys
+                Connect your Wallet Gateway — review &amp; sign every transaction yourself
               </div>
             </div>
           )}

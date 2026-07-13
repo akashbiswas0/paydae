@@ -1,15 +1,20 @@
 // Canton Wallet Gateway adapter — the contractor-side signing path.
 //
-// Speaks the gateway's JSON-RPC wallet-session protocol directly (the same
-// protocol @canton-network/dapp-sdk's RemoteAdapter uses under the hood):
-//   dApp API  (/api/v0/dapp): prepareExecute — builds + stores the prepared tx
-//   user API  (/api/v0/user): addSession / listWallets / sign / execute
-// Every exercise is prepared by the gateway, signed with the wallet's ed25519
-// key, and submitted via Canton interactive submission — the custodial backend
-// is never involved.
+// Ported from the pattern in Digital Asset's canton-network-quickstart
+// (via https://github.com/akashbiswas0/canton-start, frontend/src/ledger/adapter.ts):
+// the browser talks CIP-103 to the gateway through @canton-network/dapp-sdk.
+//
+//   connect()          -> SDK wallet picker + gateway login popup
+//   exerciseChoice()   -> prepareExecuteAndWait: the GATEWAY's approve popup is
+//                         where the user reviews and signs (wallet-kernel key),
+//                         then the gateway submits via interactive submission
+//   ccBalance()        -> authenticated ledgerApi passthrough (Token Standard
+//                         Holding interface views)
+//
+// dapp-sdk is imported dynamically so it only ever loads in the browser
+// (client components), never during SSR/build.
 
-import { GATEWAY_URL, NETWORK_ID, ONBOARD_USER, SUBMIT_USER, WALLET_HINTS, templateId } from "./config";
-import { selfSignedJwt } from "./jwt";
+import { GATEWAY_URLS, NETWORK_ID, templateId } from "./config";
 
 export interface WalletAccount {
   party: string;
@@ -18,95 +23,184 @@ export interface WalletAccount {
   namespace: string;
 }
 
-interface RpcError {
-  code: number;
-  message: string;
-  data?: unknown;
-}
+type DappSdk = typeof import("@canton-network/dapp-sdk");
 
 interface GatewayWallet {
   partyId: string;
   hint?: string;
   namespace?: string;
   primary?: boolean;
+  disabled?: boolean;
   status?: string;
+  networkId?: string;
 }
 
-let rpcId = 0;
+let dappModule: DappSdk | null = null;
+let initialized: Promise<void> | null = null;
+let initializedGateway: string | null = null;
+let sessionLostListener: (() => void) | null = null;
+let lifecycleHooked = false;
 
-async function rpc<T>(
-  apiPath: "/api/v0/dapp" | "/api/v0/user",
-  sub: string,
-  method: string,
-  params: unknown,
-): Promise<T> {
-  const jwt = await selfSignedJwt(sub);
-  let resp: Response;
+async function sdk(): Promise<DappSdk> {
+  dappModule ??= await import("@canton-network/dapp-sdk");
+  return dappModule;
+}
+
+function messageOf(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  const text = String(err);
+  return text === "[object Object]" ? "wallet request failed" : text;
+}
+
+async function assertGatewayAvailable(gatewayUrl: string): Promise<void> {
   try {
-    resp = await fetch(`${GATEWAY_URL}${apiPath}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwt}` },
-      body: JSON.stringify({ jsonrpc: "2.0", id: ++rpcId, method, params }),
-    });
-  } catch {
+    // any HTTP status proves the gateway is reachable (GET on the JSON-RPC
+    // endpoint returns 400; an explicit OPTIONS fetch would fail preflight)
+    await fetch(`${gatewayUrl}/api/v0/dapp`, { method: "GET" });
+  } catch (err) {
     throw new Error(
-      `Wallet Gateway unreachable at ${GATEWAY_URL}. Start it with: cd wallet && npm run devnet`,
+      `Canton Wallet Gateway is unavailable at ${gatewayUrl}. Start it with: cd wallet && npm run devnet (${messageOf(err)})`,
     );
   }
-  const body = (await resp.json()) as { result?: T; error?: RpcError };
-  if (body.error) {
-    const detail =
-      typeof body.error.data === "object" && body.error.data !== null
-        ? (body.error.data as { cause?: string }).cause
-        : undefined;
-    throw new Error(detail ?? body.error.message ?? `wallet ${method} failed`);
-  }
-  return body.result as T;
 }
 
-const user = <T>(sub: string, method: string, params: unknown) =>
-  rpc<T>("/api/v0/user", sub, method, params);
-const dapp = <T>(method: string, params: unknown) =>
-  rpc<T>("/api/v0/dapp", SUBMIT_USER, method, params);
+function initialize(gatewayUrl: string): Promise<void> {
+  if (initialized && initializedGateway === gatewayUrl) return initialized;
+  if (initialized && initializedGateway !== gatewayUrl) {
+    // dapp-sdk is a singleton per page; each persona page uses one gateway.
+    return Promise.reject(
+      new Error(`wallet already initialized for ${initializedGateway}; reload the page`),
+    );
+  }
+  initializedGateway = gatewayUrl;
+  initialized = sdk()
+    .then(async (dapp) => {
+      const adapters = [
+        new dapp.RemoteAdapter({
+          name: "Paydae Wallet Gateway",
+          rpcUrl: `${gatewayUrl}/api/v0/dapp`,
+        }),
+      ];
+      await dapp.init({ defaultAdapters: adapters });
+    })
+    .catch((err) => {
+      initialized = null;
+      initializedGateway = null;
+      throw err;
+    });
+  return initialized;
+}
 
-let sessionsReady: Promise<void> | null = null;
-
-/** Ensure gateway sessions exist for both gateway users (idempotent). */
-function ensureSessions(): Promise<void> {
-  sessionsReady ??= (async () => {
-    await user(SUBMIT_USER, "addSession", { networkId: NETWORK_ID });
-    await user(ONBOARD_USER, "addSession", { networkId: NETWORK_ID });
-  })().catch((err) => {
-    sessionsReady = null;
-    throw err;
+async function hookLifecycle(): Promise<void> {
+  if (lifecycleHooked) return;
+  const dapp = await sdk();
+  await dapp.onStatusChanged((status) => {
+    const s = status as { connection?: { isConnected?: boolean; isNetworkConnected?: boolean } };
+    if (!s.connection?.isConnected || !s.connection?.isNetworkConnected) {
+      sessionLostListener?.();
+    }
   });
-  return sessionsReady;
+  lifecycleHooked = true;
 }
 
-/**
- * Connect the persona's wallet: attach to the gateway session and select the
- * pre-onboarded wallet for this contractor (wallet/onboard.mjs).
- */
-export async function connect(persona: string): Promise<WalletAccount> {
-  const hint = WALLET_HINTS[persona];
-  if (!hint) throw new Error(`persona "${persona}" has no wallet`);
-  await ensureSessions();
-  const wallets = await user<GatewayWallet[]>(ONBOARD_USER, "listWallets", {});
-  const wallet = wallets.find((w) => w.hint === hint && w.status === "allocated");
-  if (!wallet) {
-    throw new Error(`No onboarded wallet "${hint}" on the gateway. Run: cd wallet && node onboard.mjs`);
-  }
+export function onSessionLost(listener: () => void): void {
+  sessionLostListener = listener;
+}
+
+function selectWallet(wallets: GatewayWallet[]): GatewayWallet | undefined {
+  const usable = wallets.filter(
+    (w) =>
+      !w.disabled &&
+      w.status !== "removed" &&
+      (!w.networkId || w.networkId === NETWORK_ID) &&
+      w.partyId,
+  );
+  return usable.find((w) => w.primary) ?? usable[0];
+}
+
+function toAccount(wallet: GatewayWallet): WalletAccount {
   return {
     party: wallet.partyId,
-    label: hint,
+    label: wallet.hint || "Canton wallet",
     namespace: wallet.namespace ?? wallet.partyId.split("::")[1] ?? "",
   };
 }
 
-interface SignResult {
-  status: string;
-  signature?: string;
-  signedBy?: string;
+/**
+ * Connect the persona's wallet: opens the SDK wallet picker and the gateway's
+ * login popup, then selects the gateway session's primary wallet. Wallets are
+ * created manually in the gateway web UI beforehand (Wallets page).
+ */
+export async function connect(persona: string): Promise<WalletAccount> {
+  const gatewayUrl = GATEWAY_URLS[persona];
+  if (!gatewayUrl) throw new Error(`persona "${persona}" has no wallet gateway`);
+  try {
+    await assertGatewayAvailable(gatewayUrl);
+    await initialize(gatewayUrl);
+    const dapp = await sdk();
+    const result = await dapp.connect();
+    if (!result.isConnected || !result.isNetworkConnected) {
+      throw new Error(
+        (result as { networkReason?: string; reason?: string }).networkReason ??
+          (result as { reason?: string }).reason ??
+          "Wallet connection was not completed.",
+      );
+    }
+    await hookLifecycle();
+    const wallets = (await dapp.listAccounts()) as GatewayWallet[];
+    const wallet = selectWallet(Array.isArray(wallets) ? wallets : [wallets]);
+    if (!wallet) {
+      throw new Error(
+        `No wallet on this gateway yet. Open ${gatewayUrl}, log into the "Wallet Onboarding" network and create one (Wallets page), then reconnect.`,
+      );
+    }
+    return toAccount(wallet);
+  } catch (err) {
+    throw new Error(messageOf(err) || "Wallet connection was not completed. Allow popups for this site and try again.");
+  }
+}
+
+export async function disconnect(): Promise<void> {
+  if (!initialized) return;
+  const dapp = await sdk();
+  await dapp.disconnect().catch(() => null);
+}
+
+/**
+ * Exercise a choice as the wallet party. prepareExecuteAndWait opens the
+ * gateway's approve popup — the user reviews the transaction there and the
+ * wallet key signs it. Resolves with the committed updateId.
+ */
+export async function exerciseChoice(
+  party: string,
+  entity: string,
+  contractId: string,
+  choice: string,
+  argument: Record<string, unknown>,
+): Promise<string> {
+  const dapp = await sdk();
+  let result;
+  try {
+    result = await dapp.prepareExecuteAndWait({
+      commands: [
+        {
+          ExerciseCommand: {
+            templateId: templateId(entity),
+            contractId,
+            choice,
+            choiceArgument: argument,
+          },
+        },
+      ],
+      commandId: `paydae-wallet-${crypto.randomUUID()}`,
+      actAs: [party],
+    });
+  } catch (err) {
+    throw new Error(messageOf(err) || "The wallet rejected or failed to process the transaction.");
+  }
+  const updateId = (result as { tx?: { payload?: { updateId?: string } } })?.tx?.payload?.updateId;
+  if (!updateId) throw new Error("wallet submitted but returned no updateId");
+  return updateId;
 }
 
 const HOLDING_INTERFACE_ID =
@@ -121,14 +215,14 @@ interface AcsRow {
 }
 
 /** Real Canton Coin (Amulet) balance of a party, read through the gateway's
- * ledger passthrough as unlocked Token Standard holdings. */
+ * authenticated ledger passthrough as unlocked Token Standard holdings. */
 export async function ccBalance(party: string): Promise<number> {
-  await ensureSessions();
-  const end = await dapp<{ offset: number }>("ledgerApi", {
+  const dapp = await sdk();
+  const end = (await dapp.ledgerApi({
     requestMethod: "get",
     resource: "/v2/state/ledger-end",
-  });
-  const rows = await dapp<AcsRow[] | null>("ledgerApi", {
+  })) as { offset: number };
+  const rows = (await dapp.ledgerApi({
     requestMethod: "post",
     resource: "/v2/state/active-contracts",
     body: {
@@ -154,7 +248,7 @@ export async function ccBalance(party: string): Promise<number> {
         },
       },
     },
-  });
+  })) as AcsRow[] | null;
   let total = 0;
   for (const row of rows ?? []) {
     for (const view of row.contractEntry?.JsActiveContract?.createdEvent?.interfaceViews ?? []) {
@@ -163,49 +257,4 @@ export async function ccBalance(party: string): Promise<number> {
     }
   }
   return total;
-}
-
-/**
- * Exercise a choice as the wallet party: gateway prepares the transaction,
- * the wallet key signs its hash, and the gateway submits it via Canton
- * interactive submission. Returns the committed updateId.
- */
-export async function exerciseChoice(
-  party: string,
-  entity: string,
-  contractId: string,
-  choice: string,
-  argument: Record<string, unknown>,
-): Promise<string> {
-  await ensureSessions();
-  const prep = await dapp<{ userUrl: string }>("prepareExecute", {
-    commands: [
-      {
-        ExerciseCommand: {
-          templateId: templateId(entity),
-          contractId,
-          choice,
-          choiceArgument: argument,
-        },
-      },
-    ],
-    commandId: `paydae-wallet-${crypto.randomUUID()}`,
-    actAs: [party],
-  });
-  const transactionId = new URL(prep.userUrl).searchParams.get("transactionId");
-  if (!transactionId) throw new Error("gateway returned no transactionId");
-
-  const signed = await user<SignResult>(SUBMIT_USER, "sign", { transactionId, partyId: party });
-  if (signed.status !== "signed" || !signed.signature || !signed.signedBy) {
-    throw new Error(`wallet did not sign the transaction (status: ${signed.status})`);
-  }
-
-  const executed = await user<{ updateId?: string }>(SUBMIT_USER, "execute", {
-    transactionId,
-    partyId: party,
-    signature: signed.signature,
-    signedBy: signed.signedBy,
-  });
-  if (!executed?.updateId) throw new Error("gateway submitted but returned no updateId");
-  return executed.updateId;
 }

@@ -10,7 +10,9 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
+    "@canton-network/dapp-sdk": "^1.4.0",
     "@reduxjs/toolkit": "^2.12.0",
+    "@walletconnect/sign-client": "^2.23.10",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.24.0",

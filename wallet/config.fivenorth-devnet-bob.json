@@ -1,6 +1,6 @@
 {
   "kernel": {
-    "id": "paydae-wallet-gateway",
+    "id": "paydae-wallet-gateway-bob",
     "clientType": "remote"
   },
   "logging": {
@@ -8,7 +8,7 @@
     "format": "pretty"
   },
   "server": {
-    "port": 3030,
+    "port": 3031,
     "dappPath": "/api/v0/dapp",
     "userPath": "/api/v0/user",
     "allowedOrigins": [
@@ -24,13 +24,13 @@
   "store": {
     "connection": {
       "type": "sqlite",
-      "database": "store.devnet.sqlite"
+      "database": "store.devnet.bob.sqlite"
     }
   },
   "signingStore": {
     "connection": {
       "type": "sqlite",
-      "database": "signing_store.devnet.sqlite"
+      "database": "signing_store.devnet.bob.sqlite"
     }
   },
   "bootstrap": {
