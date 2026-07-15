@@ -1,4 +1,4 @@
-export type Persona = "company" | "alice" | "bob";
+export type Role = "company" | "contractor";
 
 export interface ContractView {
   contractId: string;
@@ -14,7 +14,10 @@ export interface ContractView {
 }
 
 export interface PaydaeState {
-  persona: Persona;
+  role: Role;
+  party: string;
+  /** display names for every party id with a profile on this Paydae instance */
+  partyNames: Record<string, string>;
   proposals: ContractView[];
   agreements: ContractView[];
   invoices: ContractView[];
@@ -25,60 +28,32 @@ export interface PaydaeState {
 
 export type ActionName =
   | "propose"
+  | "withdraw"
   | "countersign"
   | "submitInvoice"
   | "approve"
   | "payAll"
   | "bootstrapTreasury";
 
-export interface ActionPayloads {
-  propose: { contractor: Persona; role: string; rate: number };
-  countersign: { cid: string };
-  submitInvoice: { agreementCid: string; hours: number; memo: string };
-  approve: { cid: string };
-  payAll: Record<string, never>;
-  bootstrapTreasury: { balance: number };
+/** human-readable digest of a prepared transaction (from the backend) */
+export interface TxSummary {
+  title: string;
+  description: string;
+  fields: [string, string][];
 }
 
-export interface PersonaMeta {
-  name: string;
-  label: string;
-  route: string;
-  /** Tailwind classes for the big persona badge */
-  badgeClass: string;
+export interface ContractorEntry {
+  partyId: string;
+  displayName: string;
 }
 
-export const PERSONAS: Record<Persona, PersonaMeta> = {
-  company: {
-    name: "Paydae Inc.",
-    label: "COMPANY",
-    route: "/company",
-    badgeClass: "bg-amber-500 text-zinc-950",
-  },
-  alice: {
-    name: "Alice",
-    label: "ALICE",
-    route: "/c/alice",
-    badgeClass: "bg-teal-500 text-zinc-950",
-  },
-  bob: {
-    name: "Bob",
-    label: "BOB",
-    route: "/c/bob",
-    badgeClass: "bg-violet-500 text-zinc-950",
-  },
-};
-
-const PARTY_NAMES: Record<string, string> = {
-  PaydaeCo: "Paydae Inc.",
-  PaydaeAlice: "Alice",
-  PaydaeBob: "Bob",
-};
-
-/** "PaydaeAlice::1220…" -> "Alice" */
-export function partyName(partyId: string | undefined): string {
-  const hint = (partyId ?? "").split("::")[0] ?? "";
-  return PARTY_NAMES[hint] ?? hint;
+/** "SomeHint::1220abcd…" labeled via the instance's profile directory */
+export function nameOf(
+  partyId: string | undefined,
+  partyNames: Record<string, string> | undefined,
+): string {
+  if (!partyId) return "";
+  return partyNames?.[partyId] ?? partyId.split("::")[0] ?? partyId;
 }
 
 export function formatMoney(value: string | number | undefined): string {

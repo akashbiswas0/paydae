@@ -1,38 +1,66 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { performAction } from "@/store/paydaeSlice";
-import { formatMoney, formatRate, partyName, type Persona } from "@/lib/types";
+import { prepareTx } from "@/store/paydaeSlice";
+import {
+  formatMoney,
+  formatRate,
+  nameOf,
+  type ActionName,
+  type ContractorEntry,
+} from "@/lib/types";
 import { EmptyNote, ItemRow, StatusChip } from "./ItemRow";
 import { SectionCard } from "./SectionCard";
 
-const CONTRACTOR_ITEMS: Record<string, string> = { alice: "Alice", bob: "Bob" };
+const CONTRACTORS_POLL_MS = 5000;
 
 export function CompanyView() {
   const dispatch = useAppDispatch();
+  const profile = useAppSelector((s) => s.paydae.profile);
   const data = useAppSelector((s) => s.paydae.data);
   const busy = useAppSelector((s) => s.paydae.busy);
+  const pending = useAppSelector((s) => s.paydae.pending);
 
   const [balance, setBalance] = useState("50000");
-  const [contractor, setContractor] = useState<Persona>("alice");
+  const [contractors, setContractors] = useState<ContractorEntry[]>([]);
+  const [contractor, setContractor] = useState("");
   const [role, setRole] = useState("");
   const [rate, setRate] = useState("");
 
-  if (!data) return null;
+  // directory of contractor wallets on this Paydae instance (for the offer form)
+  useEffect(() => {
+    let cancelled = false;
+    const poll = () =>
+      fetch("/api/contractors", { cache: "no-store" })
+        .then((r) => r.json())
+        .then((list: ContractorEntry[]) => {
+          if (!cancelled && Array.isArray(list)) setContractors(list);
+        })
+        .catch(() => undefined);
+    void poll();
+    const timer = setInterval(poll, CONTRACTORS_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
+
+  if (!data || !profile) return null;
   const treasury = data.treasury ?? null;
   const paydayTotal = data.approvedInvoices.reduce(
     (sum, inv) => sum + Number(inv.amount ?? 0),
     0,
   );
+  const locked = busy || pending !== null;
 
-  const act = (action: Parameters<typeof performAction>[0]["action"], payload?: Record<string, unknown>) =>
-    dispatch(performAction({ persona: "company", action, payload }));
+  const act = (action: ActionName, payload?: Record<string, unknown>) =>
+    dispatch(prepareTx({ party: profile.partyId, action, payload }));
 
   return (
     <>
@@ -62,10 +90,10 @@ export function CompanyView() {
                   />
                 </div>
                 <Button
-                  disabled={busy}
+                  disabled={locked}
                   onClick={() => act("bootstrapTreasury", { balance: Number(balance) })}
                 >
-                  Bootstrap treasury
+                  Create treasury
                 </Button>
               </div>
             )}
@@ -82,12 +110,15 @@ export function CompanyView() {
               <select
                 id="offer-contractor"
                 value={contractor}
-                onChange={(e) => setContractor(e.target.value as Persona)}
+                onChange={(e) => setContractor(e.target.value)}
                 className="border-input h-9 w-full rounded-md border bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30 [&>option]:bg-popover [&>option]:text-popover-foreground"
               >
-                {Object.entries(CONTRACTOR_ITEMS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
+                <option value="">
+                  {contractors.length ? "Pick a contractor…" : "No contractor wallets yet"}
+                </option>
+                {contractors.map((c) => (
+                  <option key={c.partyId} value={c.partyId}>
+                    {c.displayName} ({c.partyId.slice(0, 18)}…)
                   </option>
                 ))}
               </select>
@@ -112,7 +143,7 @@ export function CompanyView() {
               />
             </div>
             <Button
-              disabled={busy || !role.trim() || !Number(rate)}
+              disabled={locked || !contractor || !role.trim() || !Number(rate)}
               onClick={() =>
                 act("propose", { contractor, role: role.trim(), rate: Number(rate) }).then(() => {
                   setRole("");
@@ -131,7 +162,7 @@ export function CompanyView() {
           data.proposals.map((p) => (
             <ItemRow
               key={p.contractId}
-              title={`${partyName(p.contractor)} · ${p.role}`}
+              title={`${nameOf(p.contractor, data.partyNames)} · ${p.role}`}
               subtitle={`$${formatRate(p.hourlyRate)}/h ${p.currency} · awaiting countersign`}
               right={<StatusChip status="offered" />}
             />
@@ -146,7 +177,7 @@ export function CompanyView() {
           data.agreements.map((a) => (
             <ItemRow
               key={a.contractId}
-              title={`${partyName(a.contractor)} · ${a.role}`}
+              title={`${nameOf(a.contractor, data.partyNames)} · ${a.role}`}
               subtitle={`$${formatRate(a.hourlyRate)}/h ${a.currency}`}
               right={<StatusChip status="active" />}
             />
@@ -161,14 +192,20 @@ export function CompanyView() {
           data.invoices.map((inv) => (
             <ItemRow
               key={inv.contractId}
-              title={`${partyName(inv.contractor)} — $${formatMoney(inv.amount)}`}
+              title={`${nameOf(inv.contractor, data.partyNames)} — $${formatMoney(inv.amount)}`}
               subtitle={`${formatRate(inv.hours)}h · ${inv.memo}`}
               right={
                 <Button
                   size="sm"
                   className="bg-blue-500 text-zinc-950 hover:bg-blue-400"
-                  disabled={busy}
-                  onClick={() => act("approve", { cid: inv.contractId })}
+                  disabled={locked}
+                  onClick={() =>
+                    act("approve", {
+                      cid: inv.contractId,
+                      amount: inv.amount,
+                      contractorName: nameOf(inv.contractor, data.partyNames),
+                    })
+                  }
                 >
                   Approve
                 </Button>
@@ -185,7 +222,7 @@ export function CompanyView() {
           data.approvedInvoices.map((inv) => (
             <ItemRow
               key={inv.contractId}
-              title={`${partyName(inv.contractor)} — $${formatMoney(inv.amount)}`}
+              title={`${nameOf(inv.contractor, data.partyNames)} — $${formatMoney(inv.amount)}`}
               subtitle={`${formatRate(inv.hours)}h · ${inv.memo}`}
               right={<StatusChip status="approved" />}
             />
@@ -195,7 +232,7 @@ export function CompanyView() {
         )}
         <Button
           className="mt-3 w-full bg-gradient-to-r from-amber-500 to-amber-400 py-6 text-lg font-extrabold tracking-wide text-zinc-950 hover:from-amber-400 hover:to-amber-300"
-          disabled={busy || !data.approvedInvoices.length || !treasury}
+          disabled={locked || !data.approvedInvoices.length || !treasury}
           onClick={() => act("payAll")}
         >
           <Zap className="size-5" strokeWidth={2.5} />
@@ -203,7 +240,7 @@ export function CompanyView() {
         </Button>
         <p className="mt-2.5 text-[13px] text-muted-foreground">
           One atomic Canton transaction: every approved invoice paid, treasury debited — or
-          nothing.
+          nothing. Signed by your key.
         </p>
       </SectionCard>
 
@@ -212,7 +249,7 @@ export function CompanyView() {
           data.payments.map((p) => (
             <ItemRow
               key={p.contractId}
-              title={`${partyName(p.contractor)} — $${formatMoney(p.amount)}`}
+              title={`${nameOf(p.contractor, data.partyNames)} — $${formatMoney(p.amount)}`}
               subtitle={p.memo}
               right={<StatusChip status="paid" label="paid ✓" />}
             />

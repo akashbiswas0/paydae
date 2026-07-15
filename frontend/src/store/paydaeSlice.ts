@@ -1,62 +1,110 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { ActionName, PaydaeState, Persona } from "@/lib/types";
+import type { ActionName, PaydaeState, Role, TxSummary } from "@/lib/types";
+
+/** the wallet identity bound to the current page (no key material — see keystore) */
+export interface ActiveProfile {
+  fingerprint: string;
+  partyId: string;
+  role: Role;
+  displayName: string;
+}
+
+/** a prepared transaction awaiting the user's review + signature */
+export interface PendingTx {
+  action: ActionName;
+  summary: TxSummary;
+  preparedTransaction: string;
+  preparedTransactionHash: string;
+}
 
 interface PaydaeSliceState {
-  persona: Persona | null;
+  profile: ActiveProfile | null;
   data: PaydaeState | null;
-  /** true while an action (ledger write) is in flight */
+  /** true while a prepare/execute round-trip is in flight */
   busy: boolean;
-  /** initial load finished */
   loaded: boolean;
   error: string | null;
+  /** transaction prepared on the ledger, shown in the confirm modal */
+  pending: PendingTx | null;
   /** Canton transaction id of the last committed action */
   lastUpdateId: string | null;
 }
 
 const initialState: PaydaeSliceState = {
-  persona: null,
+  profile: null,
   data: null,
   busy: false,
   loaded: false,
   error: null,
+  pending: null,
   lastUpdateId: null,
 };
 
-export const fetchState = createAsyncThunk<PaydaeState, Persona>(
+async function api<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const res = await fetch(path, {
+    method,
+    headers: body ? { "Content-Type": "application/json" } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+    cache: "no-store",
+  });
+  const json = (await res.json()) as T & { error?: string };
+  if (!res.ok || json.error) throw new Error(json.error ?? `HTTP ${res.status}`);
+  return json;
+}
+
+export const fetchState = createAsyncThunk<PaydaeState, string>(
   "paydae/fetchState",
-  async (persona) => {
-    const res = await fetch(`/api/state?p=${persona}`, { cache: "no-store" });
-    const body = (await res.json()) as PaydaeState & { error?: string };
-    if (!res.ok || body.error) throw new Error(body.error ?? `HTTP ${res.status}`);
-    return body;
-  },
+  (party) => api<PaydaeState>("GET", `/api/state?party=${encodeURIComponent(party)}`),
 );
 
-export const performAction = createAsyncThunk<
-  string | null,
-  { persona: Persona; action: ActionName; payload?: Record<string, unknown> },
+/** Step 1 of a wallet-signed write: the backend prepares the exact transaction
+ * and returns its hash + a human-readable summary for the confirm modal. */
+export const prepareTx = createAsyncThunk<
+  PendingTx,
+  { party: string; action: ActionName; payload?: Record<string, unknown> },
   { rejectValue: string }
->("paydae/performAction", async ({ persona, action, payload }, { dispatch, rejectWithValue }) => {
-  const res = await fetch("/api/action", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ p: persona, action, payload: payload ?? {} }),
-  });
-  const body = (await res.json()) as { ok?: boolean; error?: string; updateId?: string | null };
-  if (!res.ok || body.error) return rejectWithValue(body.error ?? `HTTP ${res.status}`);
-  await dispatch(fetchState(persona));
-  return body.updateId ?? null;
+>("paydae/prepareTx", async ({ party, action, payload }, { rejectWithValue }) => {
+  try {
+    const res = await api<Omit<PendingTx, "action">>("POST", "/api/tx/prepare", {
+      party,
+      action,
+      payload: payload ?? {},
+    });
+    return { ...res, action };
+  } catch (err) {
+    return rejectWithValue(err instanceof Error ? err.message : String(err));
+  }
+});
+
+/** Step 2: the browser signed the hash (see ConfirmModal) — submit the signature. */
+export const executeTx = createAsyncThunk<
+  string | null,
+  { party: string; preparedTransaction: string; signature: string },
+  { rejectValue: string }
+>("paydae/executeTx", async (body, { dispatch, rejectWithValue }) => {
+  try {
+    const res = await api<{ updateId?: string | null }>("POST", "/api/tx/execute", body);
+    await dispatch(fetchState(body.party));
+    return res.updateId ?? null;
+  } catch (err) {
+    return rejectWithValue(err instanceof Error ? err.message : String(err));
+  }
 });
 
 const paydaeSlice = createSlice({
   name: "paydae",
   initialState,
   reducers: {
-    setPersona(state, action: PayloadAction<Persona>) {
-      if (state.persona !== action.payload) {
-        return { ...initialState, persona: action.payload };
+    setProfile(state, action: PayloadAction<ActiveProfile>) {
+      if (state.profile?.partyId !== action.payload.partyId) {
+        return { ...initialState, profile: action.payload };
       }
       return state;
+    },
+    /** user clicked Reject in the confirm modal — nothing was ever submitted */
+    rejectPending(state) {
+      state.pending = null;
+      state.busy = false;
     },
     clearError(state) {
       state.error = null;
@@ -68,29 +116,42 @@ const paydaeSlice = createSlice({
   extraReducers: (builder) => {
     builder
       .addCase(fetchState.fulfilled, (state, action) => {
-        // ignore stale responses after a persona switch
-        if (state.persona !== action.payload.persona) return;
+        // ignore stale responses after a profile switch
+        if (state.profile?.partyId !== action.payload.party) return;
         state.loaded = true;
         // keep the old reference when nothing changed so components skip re-rendering
         if (JSON.stringify(state.data) !== JSON.stringify(action.payload)) {
           state.data = action.payload;
         }
       })
-      .addCase(performAction.pending, (state) => {
+      .addCase(prepareTx.pending, (state) => {
         state.busy = true;
         state.error = null;
         state.lastUpdateId = null;
       })
-      .addCase(performAction.fulfilled, (state, action) => {
+      .addCase(prepareTx.fulfilled, (state, action) => {
         state.busy = false;
+        state.pending = action.payload;
+      })
+      .addCase(prepareTx.rejected, (state, action) => {
+        state.busy = false;
+        state.error = action.payload ?? action.error.message ?? "prepare failed";
+      })
+      .addCase(executeTx.pending, (state) => {
+        state.busy = true;
+      })
+      .addCase(executeTx.fulfilled, (state, action) => {
+        state.busy = false;
+        state.pending = null;
         state.lastUpdateId = action.payload;
       })
-      .addCase(performAction.rejected, (state, action) => {
+      .addCase(executeTx.rejected, (state, action) => {
         state.busy = false;
-        state.error = action.payload ?? action.error.message ?? "action failed";
+        state.pending = null;
+        state.error = action.payload ?? action.error.message ?? "execute failed";
       });
   },
 });
 
-export const { setPersona, clearError, clearUpdateId } = paydaeSlice.actions;
+export const { setProfile, rejectPending, clearError, clearUpdateId } = paydaeSlice.actions;
 export default paydaeSlice.reducer;

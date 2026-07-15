@@ -5,66 +5,54 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { performAction } from "@/store/paydaeSlice";
-import { formatMoney, formatRate, partyName, type Persona } from "@/lib/types";
+import { prepareTx } from "@/store/paydaeSlice";
+import { formatMoney, formatRate, nameOf, type ActionName } from "@/lib/types";
 import { EmptyNote, ItemRow, StatusChip } from "./ItemRow";
 import { SectionCard } from "./SectionCard";
-// wallet-integration: wallet mode (flag-gated) — components + routing live in src/wallet/
-import { WalletCard } from "@/wallet/WalletCard";
-import { useContractorWallet } from "@/wallet/useContractorWallet";
 
-export function ContractorView({ persona }: { persona: Persona }) {
+export function ContractorView() {
   const dispatch = useAppDispatch();
-  const custodialData = useAppSelector((s) => s.paydae.data);
-  const custodialBusy = useAppSelector((s) => s.paydae.busy);
+  const profile = useAppSelector((s) => s.paydae.profile);
+  const data = useAppSelector((s) => s.paydae.data);
+  const busy = useAppSelector((s) => s.paydae.busy);
+  const pending = useAppSelector((s) => s.paydae.pending);
 
   const [hours, setHours] = useState("");
   const [memo, setMemo] = useState("");
 
-  // wallet-integration: when a wallet is connected, read the WALLET party's state
-  // and route Countersign / SubmitInvoice through the wallet (gateway approve popup)
-  const wallet = useContractorWallet(persona);
-  const data = wallet.active ? wallet.data : custodialData;
-  const busy = wallet.active ? wallet.busy : custodialBusy;
-
-  if (!data) {
-    // wallet-integration: keep the wallet panel reachable before first wallet poll
-    return wallet.active || custodialData === null ? <WalletCard persona={persona} /> : null;
-  }
+  if (!data || !profile) return null;
   const agreement = data.agreements[0];
   const computed = agreement ? Number(hours) * Number(agreement.hourlyRate ?? 0) : 0;
+  const locked = busy || pending !== null;
   const invoices = [
     ...data.invoices.map((inv) => ({ ...inv, status: "pending" as const })),
     ...data.approvedInvoices.map((inv) => ({ ...inv, status: "approved" as const })),
   ];
 
+  const act = (action: ActionName, payload?: Record<string, unknown>) =>
+    dispatch(prepareTx({ party: profile.partyId, action, payload }));
+
   return (
     <>
-      {/* wallet-integration: wallet panel (null when flag off) */}
-      <WalletCard persona={persona} />
       <SectionCard title="Offers">
         {data.proposals.length ? (
           data.proposals.map((offer) => (
             <ItemRow
               key={offer.contractId}
               title={`${offer.role} · $${formatRate(offer.hourlyRate)}/h ${offer.currency}`}
-              subtitle={`Offer from ${partyName(offer.company)}`}
+              subtitle={`Offer from ${nameOf(offer.company, data.partyNames)}`}
               right={
                 <Button
                   size="sm"
                   className="bg-emerald-500 text-zinc-950 hover:bg-emerald-400"
-                  disabled={busy}
+                  disabled={locked}
                   onClick={() =>
-                    // wallet-integration: wallet-signed countersign (gateway popup) when connected
-                    wallet.active
-                      ? wallet.countersign(offer)
-                      : dispatch(
-                          performAction({
-                            persona,
-                            action: "countersign",
-                            payload: { cid: offer.contractId },
-                          }),
-                        )
+                    act("countersign", {
+                      cid: offer.contractId,
+                      role: offer.role,
+                      rate: offer.hourlyRate,
+                      companyName: nameOf(offer.company, data.partyNames),
+                    })
                   }
                 >
                   Countersign
@@ -82,7 +70,7 @@ export function ContractorView({ persona }: { persona: Persona }) {
           <>
             <ItemRow
               title={`${agreement.role} · $${formatRate(agreement.hourlyRate)}/h ${agreement.currency}`}
-              subtitle={`Active agreement with ${partyName(agreement.company)}`}
+              subtitle={`Active agreement with ${nameOf(agreement.company, data.partyNames)}`}
               right={<StatusChip status="active" />}
             />
             <div className="mt-3 space-y-3">
@@ -109,28 +97,18 @@ export function ContractorView({ persona }: { persona: Persona }) {
                 {computed > 0 ? `= $${formatMoney(computed)} USD` : ""}
               </p>
               <Button
-                disabled={busy || !Number(hours)}
-                onClick={() => {
-                  // wallet-integration: wallet-signed invoice (gateway popup) when connected
-                  if (wallet.active) {
-                    wallet.submitInvoice(agreement, Number(hours), memo.trim());
-                    return;
-                  }
-                  void dispatch(
-                    performAction({
-                      persona,
-                      action: "submitInvoice",
-                      payload: {
-                        agreementCid: agreement.contractId,
-                        hours: Number(hours),
-                        memo: memo.trim(),
-                      },
-                    }),
-                  ).then(() => {
+                disabled={locked || !Number(hours)}
+                onClick={() =>
+                  act("submitInvoice", {
+                    agreementCid: agreement.contractId,
+                    hours: Number(hours),
+                    memo: memo.trim(),
+                    rate: agreement.hourlyRate,
+                  }).then(() => {
                     setHours("");
                     setMemo("");
-                  });
-                }}
+                  })
+                }
               >
                 Submit invoice
               </Button>
