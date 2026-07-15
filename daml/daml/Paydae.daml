@@ -1,6 +1,16 @@
 module Paydae where
 
 import DA.Foldable (forA_)
+import DA.Optional (fromOptional)
+
+-- Auditors are observers everywhere: they see the full document trail of any
+-- company that designated them (via Treasury SetAuditors) but control nothing.
+-- The list propagates from Treasury -> proposals -> the whole choice chain.
+-- Optional so v0.2.0 is a valid upgrade of v0.1.0 (pre-auditor contracts
+-- read as None and keep working).
+
+auditorsOf : Optional [Party] -> [Party]
+auditorsOf = fromOptional []
 
 -- | Company offers terms; only the named contractor can see (and accept) it.
 template AgreementProposal
@@ -10,9 +20,10 @@ template AgreementProposal
     role : Text
     hourlyRate : Decimal
     currency : Text
+    auditors : Optional [Party]
   where
     signatory company
-    observer contractor
+    observer contractor, auditorsOf auditors
 
     choice Countersign : ContractId Agreement
       controller contractor
@@ -31,8 +42,10 @@ template Agreement
     role : Text
     hourlyRate : Decimal
     currency : Text
+    auditors : Optional [Party]
   where
     signatory company, contractor
+    observer auditorsOf auditors
 
     nonconsuming choice SubmitInvoice : ContractId Invoice
       with
@@ -46,6 +59,7 @@ template Agreement
            currency
            hours
            memo
+           auditors
 
 template Invoice
   with
@@ -55,8 +69,10 @@ template Invoice
     currency : Text
     hours : Decimal
     memo : Text
+    auditors : Optional [Party]
   where
     signatory company, contractor
+    observer auditorsOf auditors
 
     choice Approve : ContractId ApprovedInvoice
       controller company
@@ -70,8 +86,10 @@ template ApprovedInvoice
     currency : Text
     hours : Decimal
     memo : Text
+    auditors : Optional [Party]
   where
     signatory company, contractor
+    observer auditorsOf auditors
 
     -- Treasury cannot plain-archive a dual-signed contract; payday consumes
     -- approved invoices by exercising this company-controlled choice.
@@ -86,17 +104,20 @@ template Payment
     amount : Decimal
     currency : Text
     memo : Text
+    auditors : Optional [Party]
   where
     signatory company
-    observer contractor
+    observer contractor, auditorsOf auditors
 
 template Treasury
   with
     company : Party
     balance : Decimal
     currency : Text
+    auditors : Optional [Party]
   where
     signatory company
+    observer auditorsOf auditors
 
     -- One exercise = atomic payday: every invoice paid and the balance
     -- debited in a single transaction, or nothing happens at all.
@@ -111,3 +132,11 @@ template Treasury
          assertMsg "insufficient treasury balance" (total <= balance)
          forA_ invoiceCids $ \cid -> exercise cid MarkPaid
          create this with balance = balance - total
+
+    -- Designation is itself a signed ledger action; the new auditor set flows
+    -- into every proposal the company creates from then on.
+    choice SetAuditors : ContractId Treasury
+      with
+        newAuditors : [Party]
+      controller company
+      do create this with auditors = Some newAuditors
