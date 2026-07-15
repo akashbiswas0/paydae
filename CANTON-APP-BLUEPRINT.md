@@ -82,11 +82,13 @@ Every Ledger API call: `Authorization: Bearer <jwt>`, JSON bodies, base URL `$LE
 
 ```json
 {
-  "packageId": "b6c41b85c14063cad92ff77488b39bce6b42ef837805f7626f5bef948876d240",
+  "packageId": "1ea37a34dcde97964bd5575730f04bc63aa9d528050b055234a5b932c3a18546",
   "parties": { "...legacy custodial demo parties, not needed for new apps..." : "" },
   "userId": "6"
 }
 ```
+
+(That packageId is `paydae v0.2.0` — the auditor-enabled upgrade of v0.1.0, see §3.1/§3.2.)
 
 - `packageId` — the hash of the uploaded DAR; template IDs are `<packageId>:<Module>:<Entity>`.
 - `userId: "6"` — the **ledger user** the backend's JWT maps to on this validator. It has
@@ -126,13 +128,15 @@ Write your domain as templates in `daml/daml/<Module>.daml`. Rules of thumb prov
 Build + deploy (this is an **admin HTTP call**, not a wallet action — no wallet "deploys" anything):
 
 ```bash
-cd daml && daml build                     # requires daml SDK (yaml says sdk-version 3.5.2)
+# toolchain on this machine is dpm (not the classic daml CLI); non-interactive shells
+# need: export PATH="$HOME/.dpm/bin:/opt/homebrew/opt/openjdk@21/bin:$PATH"
+cd daml && dpm build                      # daml.yaml says sdk-version 3.5.2
 # upload .daml/dist/<name>-<version>.dar:
 curl -X POST "$LEDGER_API/v2/packages" -H "Authorization: Bearer $JWT" \
   -H "Content-Type: application/octet-stream" --data-binary "@<file>.dar"
 ```
 
-The new `packageId` is the DAR's main package hash (`daml damlc inspect-dar` shows it);
+The new `packageId` is the DAR's main package hash (`dpm damlc inspect-dar` shows it);
 put it in `config.json`. `scripts/devnet.sh` wraps token/upload/acs helpers.
 
 ### 3.1 Upgrading a live package (proven on devnet)
@@ -340,14 +344,14 @@ profile checks are only for friendly errors.
 ## 7. Backend API surface (the pattern to replicate)
 
 Express, port 4000, `cors()`, `express.json({ limit: '2mb' })` (prepared transactions are big).
-See `backend/src/index.ts`. Any Canton app should expose the same seven-route shape:
+See `backend/src/index.ts`. Any Canton app should expose the same route shape:
 
 | route | body → response | purpose |
 | --- | --- | --- |
 | `POST /api/wallet/create` | `{role, displayName, publicKey}` → generate-topology result | validate pubkey (`/^[A-Za-z0-9+/]{43}=$/`), 409 if key already has a profile |
 | `POST /api/wallet/create/complete` | topo fields + `multiHashSignature` → `{role, partyId, displayName}` | allocate → waitForParty → save profile |
 | `POST /api/wallet/load` | `{publicKey}` → profile or 404 | "Load Wallet" lookup |
-| `GET /api/contractors` (directory) | → `[{partyId, displayName}]` | so users can address each other without pasting party IDs |
+| `GET /api/contractors`, `GET /api/auditors` (directories) | → `[{partyId, displayName}]` | one per addressable role, so users pick each other from dropdowns instead of pasting party IDs |
 | `GET /api/state?party=` | → role-aware grouped ACS + `partyNames` map | poll every ~2.5s from the shell |
 | `GET /api/update/:updateId?party=` | → receipt or 404 | transaction receipt page |
 | `POST /api/tx/prepare` | `{party, action, payload}` → `{preparedTransaction, preparedTransactionHash, summary}` | server builds commands **and** the confirm-modal summary |
@@ -358,6 +362,18 @@ switch that (1) enforces role checks, (2) validates payload server-side, (3) ret
 `{commands, summary: {title, description, fields: [label, value][]}}`. Display-only payload
 fields (names, rates for math) feed the summary **only** — commands are built from contract IDs
 and validated inputs, so a lying client can only mislabel its own confirm modal, never forge state.
+
+Auditor specifics in this layer (Paydae: roles `company | contractor | auditor`):
+
+- `designateAuditor` action (company only): validates the target party has an `auditor`
+  profile, finds the company's registry contract (Treasury) in the ACS, exercises
+  `SetAuditors`. Its summary spells out the visibility grant being signed.
+- `propose` reads the registry's auditor list from the ACS and stamps it on each new root
+  contract; when non-empty the summary gains a "Visible to auditor: *Name*" row so the
+  disclosure is visible in the confirm modal **before** signing.
+- `groupState` gets an auditor branch: same entity groups (the ledger already filtered to
+  designated companies' contracts), plus `treasuries[]` since an auditor can watch several
+  companies. **No authorization code** — stakeholder filtering is done by Canton.
 
 Profiles store (`backend/src/profiles.ts`): better-sqlite3, WAL mode, single table
 `profiles(fingerprint PK, public_key UNIQUE, party_id UNIQUE, role, display_name, created_at)`.
@@ -373,7 +389,7 @@ Gitignore the `.sqlite*` files.
 - localStorage key `"<app>.wallets"` holding a map `fingerprint → StoredWallet`
   (`fingerprint = partyId.split("::")[1]`).
 - Keys deliberately **stay out of Redux** so they never appear in devtools state dumps.
-- **Key file** (downloaded on create, importable anywhere):
+- **Key file** (saved via an explicit download button — never auto-downloaded; importable anywhere):
   ```json
   { "version": 1, "app": "<appname>", "role": "...", "displayName": "...",
     "partyId": "...", "publicKey": "<b64>", "privateKey": "<b64>" }
@@ -385,13 +401,16 @@ Gitignore the `.sqlite*` files.
 
 ### 8.2 Flows (`frontend/src/wallet/onboarding.ts`, `Landing.tsx`)
 
-- **Create wallet:** keygen → `POST /api/wallet/create` → sign `multiHash` → `.../complete`
-  → save to keystore → **force key-file download** → route to `/w/<fingerprint>`. Any
-  role-specific bootstrap action (Paydae: create treasury) is prepared+signed+executed silently
-  with the fresh key as part of onboarding.
+- **Create wallet:** one card per role (Paydae: Company / Contractor / Auditor) → keygen →
+  `POST /api/wallet/create` → sign `multiHash` → `.../complete` → save to keystore → route to
+  `/w/<fingerprint>`. Any role-specific bootstrap action (Paydae: create treasury) is
+  prepared+signed+executed silently with the fresh key as part of onboarding. The key file is
+  **not** auto-downloaded — the user saves it via the explicit download button in the wallet
+  header; the UI copy must make clear the browser copy is the only one until they do.
 - **Load wallet:** file picker **and** paste-textarea fallback → `parseKeyFile` →
-  `POST /api/wallet/load` → show "This is a **company/contractor** profile: *Name*" with a
-  role-matching "Load … Profile" button → import to keystore → route to the wallet page.
+  `POST /api/wallet/load` → show "This is a **<role>** profile: *Name*" (role meta is a
+  `Record<Role, …>` so new roles get colors/labels in one place) with a role-matching
+  "Load … Profile" button → import to keystore → route to the wallet page.
 - **Wallets on this device:** chips listing keystore entries (open / forget).
 
 ### 8.3 App shell + signing UX
@@ -410,13 +429,21 @@ Gitignore the `.sqlite*` files.
   Lock all action buttons while `busy || pending !== null`.
 - **TxToast**: on commit, show "Committed on Canton — tx `<id slice>`" for ~12s (devnet is slow;
   shorter timeouts get missed), clickable → receipt page, with a copy-id button.
+- **Read-only roles** (Paydae: `AuditorView`) render pure dashboards with **no signing surface**
+  — group the ACS by counterparty (per-company books: registry contract, agreements, invoices,
+  payments) and give the empty state a sentence explaining visibility arrives when a company
+  designates them. They still reuse the shell, receipt page, and keystore unchanged. The
+  designating side (CompanyView) gets a directory dropdown + a wallet-signed "Designate
+  auditor" button and shows who currently audits the books.
 
 ---
 
 ## 9. Recipe: build a NEW Canton app from this blueprint
 
-1. **Model** the domain as Daml templates (section 3). `daml build`, upload the DAR
-   (`scripts/devnet.sh upload`), record the new `packageId` in `config.json`.
+1. **Model** the domain as Daml templates (section 3). `dpm build`, upload the DAR
+   (`scripts/devnet.sh upload`), record the new `packageId` in `config.json`. If the app
+   needs a regulator/auditor/read-only viewer, bake in the §3.2 pattern from day one
+   (`auditors : Optional [Party]` observers + a designation choice on a registry contract).
 2. **Backend**: copy the layer verbatim — `env.ts` (reads root `.env` + `config.json`),
    `ledger.ts` (token cache, `ledger()` wrapper, onboarding, prepare/execute, ACS, update-by-id
    — all app-agnostic, reuse unchanged), `profiles.ts` (rename roles), and rewrite **only**
@@ -433,7 +460,11 @@ Gitignore the `.sqlite*` files.
    - forged signature (another party's key) → ledger rejects;
    - privacy: a party's `/api/state` shows only its own contracts, and a non-stakeholder
      receipt lookup 404s;
-   - restore: forget wallet → import key file → dashboard intact.
+   - restore: forget wallet → import key file → dashboard intact;
+   - selective disclosure (if using §3.2): the auditor sees the full document chain of a
+     designating company (dashboard **and** tx receipts, delivered via their own party
+     filter on the ledger), while an undesignated company's contracts never appear and its
+     receipt lookups return "not found". Evidence run: `wallet/E2E-auditor.md`.
 
 ## 10. Devnet gotchas (hard-won, do not rediscover)
 
