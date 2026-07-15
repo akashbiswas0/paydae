@@ -5,7 +5,7 @@
 import { templateId } from './env.js';
 import { activeContracts } from './ledger.js';
 import { profileByParty } from './profiles.js';
-import type { ActionName, LedgerCommand, Profile, TxSummary } from './types.js';
+import type { ActionName, Contract, LedgerCommand, Profile, TxSummary } from './types.js';
 
 const createCmd = (entity: string, createArguments: Record<string, unknown>): LedgerCommand => ({
   CreateCommand: { templateId: templateId(entity), createArguments },
@@ -35,6 +35,12 @@ function num(payload: Record<string, unknown>, key: string): number {
 const money = (n: number) =>
   n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/** auditors designated on the company's treasury (Optional [Party] on-ledger) */
+const auditorsOf = (treasury: Contract | undefined): string[] => {
+  const v = treasury?.arg['auditors'];
+  return Array.isArray(v) ? (v as string[]) : [];
+};
+
 export interface BuiltAction {
   commands: LedgerCommand[];
   summary: TxSummary;
@@ -56,6 +62,19 @@ export async function buildAction(
       }
       const role = str(payload, 'role');
       const rate = num(payload, 'rate');
+      // the treasury is the source of truth for who audits this company;
+      // its auditor set flows onto every new proposal (and everything downstream)
+      const acs = await activeContracts(party);
+      const auditors = auditorsOf(acs.find((c) => c.entity === 'Treasury'));
+      const fields: [string, string][] = [
+        ['Contractor', target.displayName],
+        ['Role', role],
+        ['Hourly rate', `$${money(rate)} USD`],
+      ];
+      if (auditors.length) {
+        const names = auditors.map((a) => profileByParty(a)?.displayName ?? a.split('::')[0]);
+        fields.push(['Visible to auditor', names.join(', ')]);
+      }
       return {
         commands: [
           createCmd('AgreementProposal', {
@@ -64,16 +83,13 @@ export async function buildAction(
             role,
             hourlyRate: String(rate),
             currency: 'USD',
+            auditors: auditors.length ? auditors : null,
           }),
         ],
         summary: {
           title: 'Send contract offer',
           description: `Offer a ${role} engagement to ${target.displayName}.`,
-          fields: [
-            ['Contractor', target.displayName],
-            ['Role', role],
-            ['Hourly rate', `$${money(rate)} USD`],
-          ],
+          fields,
         },
       };
     }
@@ -178,12 +194,34 @@ export async function buildAction(
             company: party,
             balance: String(balance),
             currency: 'USD',
+            auditors: null,
           }),
         ],
         summary: {
           title: 'Create treasury',
           description: 'Set up the company treasury that payday draws from.',
           fields: [['Opening balance', `$${money(balance)} USD`]],
+        },
+      };
+    }
+    case 'designateAuditor': {
+      if (profile.role !== 'company') throw new Error('only a company can designate an auditor');
+      const auditor = str(payload, 'auditor');
+      const target = profileByParty(auditor);
+      if (!target || target.role !== 'auditor') throw new Error('unknown auditor party');
+      const acs = await activeContracts(party);
+      const treasury = acs.find((c) => c.entity === 'Treasury');
+      if (!treasury) throw new Error('no treasury — create one first');
+      return {
+        commands: [
+          exerciseCmd('Treasury', treasury.contractId, 'SetAuditors', {
+            newAuditors: [auditor],
+          }),
+        ],
+        summary: {
+          title: 'Designate auditor',
+          description: `${target.displayName} will see your treasury and every agreement, invoice and payment you create from now on — read-only, enforced by the ledger.`,
+          fields: [['Auditor', target.displayName]],
         },
       };
     }

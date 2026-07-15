@@ -15,11 +15,35 @@ db.exec(`
     fingerprint  TEXT PRIMARY KEY,
     public_key   TEXT NOT NULL UNIQUE,
     party_id     TEXT NOT NULL UNIQUE,
-    role         TEXT NOT NULL CHECK (role IN ('company', 'contractor')),
+    role         TEXT NOT NULL CHECK (role IN ('company', 'contractor', 'auditor')),
     display_name TEXT NOT NULL,
     created_at   TEXT NOT NULL
   )
 `);
+
+// pre-auditor databases carry a CHECK that rejects 'auditor' — rebuild in place
+{
+  const schema = db
+    .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'profiles'")
+    .get() as { sql: string };
+  if (!schema.sql.includes('auditor')) {
+    db.exec(`
+      BEGIN;
+      ALTER TABLE profiles RENAME TO profiles_old;
+      CREATE TABLE profiles (
+        fingerprint  TEXT PRIMARY KEY,
+        public_key   TEXT NOT NULL UNIQUE,
+        party_id     TEXT NOT NULL UNIQUE,
+        role         TEXT NOT NULL CHECK (role IN ('company', 'contractor', 'auditor')),
+        display_name TEXT NOT NULL,
+        created_at   TEXT NOT NULL
+      );
+      INSERT INTO profiles SELECT * FROM profiles_old;
+      DROP TABLE profiles_old;
+      COMMIT;
+    `);
+  }
+}
 
 interface Row {
   fingerprint: string;
@@ -65,6 +89,13 @@ export function profileByParty(partyId: string): Profile | null {
 export function listContractors(): Profile[] {
   const rows = db
     .prepare("SELECT * FROM profiles WHERE role = 'contractor' ORDER BY created_at")
+    .all() as Row[];
+  return rows.map(toProfile);
+}
+
+export function listAuditors(): Profile[] {
+  const rows = db
+    .prepare("SELECT * FROM profiles WHERE role = 'auditor' ORDER BY created_at")
     .all() as Row[];
   return rows.map(toProfile);
 }

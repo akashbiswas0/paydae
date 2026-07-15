@@ -25,6 +25,7 @@ import {
 import { groupState } from './state.js';
 import { buildAction } from './walletActions.js';
 import {
+  listAuditors,
   listContractors,
   partyNames as partyNamesMap,
   profileByParty,
@@ -39,7 +40,8 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '2mb' })); // prepared transactions are sizeable
 
-const isRole = (r: unknown): r is Role => r === 'company' || r === 'contractor';
+const isRole = (r: unknown): r is Role =>
+  r === 'company' || r === 'contractor' || r === 'auditor';
 const isPublicKey = (k: unknown): k is string =>
   typeof k === 'string' && /^[A-Za-z0-9+/]{43}=$/.test(k);
 
@@ -63,7 +65,7 @@ app.post(
   '/api/wallet/create',
   handle(async (req, res) => {
     const { role, displayName, publicKey } = req.body ?? {};
-    if (!isRole(role)) return fail(res, 400, 'role must be "company" or "contractor"');
+    if (!isRole(role)) return fail(res, 400, 'role must be "company", "contractor" or "auditor"');
     if (typeof displayName !== 'string' || !displayName.trim()) {
       return fail(res, 400, 'missing displayName');
     }
@@ -89,7 +91,7 @@ app.post(
       topologyTransactions,
       multiHashSignature,
     } = req.body ?? {};
-    if (!isRole(role)) return fail(res, 400, 'role must be "company" or "contractor"');
+    if (!isRole(role)) return fail(res, 400, 'role must be "company", "contractor" or "auditor"');
     if (typeof displayName !== 'string' || !displayName.trim()) {
       return fail(res, 400, 'missing displayName');
     }
@@ -136,6 +138,13 @@ app.get(
     res.json(
       listContractors().map((p) => ({ partyId: p.partyId, displayName: p.displayName })),
     );
+  }),
+);
+
+app.get(
+  '/api/auditors',
+  handle(async (_req, res) => {
+    res.json(listAuditors().map((p) => ({ partyId: p.partyId, displayName: p.displayName })));
   }),
 );
 

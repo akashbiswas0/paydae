@@ -31,5 +31,9 @@ export function groupState(contracts: Contract[], role: Role, party: string): Pa
     // a company can only see its own treasury (signatory-only contract)
     state.treasury = (groups['Treasury'] ?? []).find((t) => t['company'] === party) ?? null;
   }
+  if (role === 'auditor') {
+    // every treasury in the auditor's ACS is one whose company designated them
+    state.treasuries = groups['Treasury'] ?? [];
+  }
   return state;
 }
