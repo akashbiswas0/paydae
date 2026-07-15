@@ -1,9 +1,18 @@
-export type Persona = 'company' | 'alice' | 'bob';
+export type Role = 'company' | 'contractor';
 
 export interface PaydaeConfig {
   packageId: string;
-  parties: Record<Persona, string>;
+  parties: Record<string, string>;
   userId: string;
+}
+
+export interface Profile {
+  fingerprint: string;
+  publicKey: string;
+  partyId: string;
+  role: Role;
+  displayName: string;
+  createdAt: string;
 }
 
 export interface Contract {
@@ -18,7 +27,10 @@ export interface ContractView {
 }
 
 export interface PaydaeState {
-  persona: Persona;
+  role: Role;
+  party: string;
+  /** display names for every party id that has a profile (for rendering) */
+  partyNames: Record<string, string>;
   proposals: ContractView[];
   agreements: ContractView[];
   invoices: ContractView[];
@@ -29,16 +41,18 @@ export interface PaydaeState {
 
 export type ActionName =
   | 'propose'
+  | 'withdraw'
   | 'countersign'
   | 'submitInvoice'
   | 'approve'
   | 'payAll'
   | 'bootstrapTreasury';
 
-export interface ActionRequest {
-  p: Persona;
-  action: ActionName;
-  payload?: Record<string, unknown>;
+/** human-readable digest of a prepared transaction, rendered in the confirm modal */
+export interface TxSummary {
+  title: string;
+  description: string;
+  fields: [string, string][];
 }
 
 export interface LedgerCommand {

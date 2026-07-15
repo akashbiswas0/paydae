@@ -1,4 +1,5 @@
-import type { Contract, ContractView, PaydaeState, Persona } from './types.js';
+import { partyNames } from './profiles.js';
+import type { Contract, ContractView, PaydaeState, Role } from './types.js';
 
 const ENTITIES = [
   'AgreementProposal',
@@ -9,7 +10,7 @@ const ENTITIES = [
   'Treasury',
 ] as const;
 
-export function groupState(contracts: Contract[], persona: Persona): PaydaeState {
+export function groupState(contracts: Contract[], role: Role, party: string): PaydaeState {
   const groups: Record<string, ContractView[]> = Object.fromEntries(
     ENTITIES.map((e) => [e, []]),
   );
@@ -17,15 +18,18 @@ export function groupState(contracts: Contract[], persona: Persona): PaydaeState
     groups[c.entity]?.push({ contractId: c.contractId, ...c.arg });
   }
   const state: PaydaeState = {
-    persona,
+    role,
+    party,
+    partyNames: partyNames(),
     proposals: groups['AgreementProposal'] ?? [],
     agreements: groups['Agreement'] ?? [],
     invoices: groups['Invoice'] ?? [],
     approvedInvoices: groups['ApprovedInvoice'] ?? [],
     payments: groups['Payment'] ?? [],
   };
-  if (persona === 'company') {
-    state.treasury = groups['Treasury']?.[0] ?? null;
+  if (role === 'company') {
+    // a company can only see its own treasury (signatory-only contract)
+    state.treasury = (groups['Treasury'] ?? []).find((t) => t['company'] === party) ?? null;
   }
   return state;
 }
