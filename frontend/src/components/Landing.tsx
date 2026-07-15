@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, HardHat, KeyRound, Trash2 } from "lucide-react";
+import { Building2, HardHat, KeyRound, ShieldCheck, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -18,9 +18,31 @@ import {
 } from "@/wallet/onboarding";
 import type { parseKeyFile } from "@/wallet/keystore";
 
-const ROLE_META: Record<Role, { badge: string; label: string }> = {
-  company: { badge: "bg-amber-500 text-zinc-950", label: "COMPANY" },
-  contractor: { badge: "bg-teal-500 text-zinc-950", label: "CONTRACTOR" },
+const ROLE_META: Record<Role, { badge: string; text: string; label: string }> = {
+  company: { badge: "bg-amber-500 text-zinc-950", text: "text-amber-400", label: "COMPANY" },
+  contractor: { badge: "bg-teal-500 text-zinc-950", text: "text-teal-400", label: "CONTRACTOR" },
+  auditor: { badge: "bg-sky-500 text-zinc-950", text: "text-sky-400", label: "AUDITOR" },
+};
+
+const CREATE_META: Record<Role, { icon: React.ReactNode; title: string; blurb: string; placeholder: string }> = {
+  company: {
+    icon: <Building2 className="size-4" />,
+    title: "Create Company",
+    blurb: "A new Canton party with its own key — hires contractors, approves invoices, runs payday.",
+    placeholder: "AcmeCo",
+  },
+  contractor: {
+    icon: <HardHat className="size-4" />,
+    title: "Create Contractor",
+    blurb: "A new Canton party with its own key — countersigns agreements and submits invoices.",
+    placeholder: "Jane",
+  },
+  auditor: {
+    icon: <ShieldCheck className="size-4" />,
+    title: "Create Auditor",
+    blurb: "A read-only Canton party — sees the full books of any company that designates it, nothing else.",
+    placeholder: "Ava Audit",
+  },
 };
 
 function CreateCard({ role }: { role: Role }) {
@@ -57,19 +79,15 @@ function CreateCard({ role }: { role: Role }) {
     <Card className="w-80">
       <CardContent className="space-y-3 pt-1">
         <div className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-extrabold ${ROLE_META[role].badge}`}>
-          {isCompany ? <Building2 className="size-4" /> : <HardHat className="size-4" />}
-          Create {isCompany ? "Company" : "Contractor"}
+          {CREATE_META[role].icon}
+          {CREATE_META[role].title}
         </div>
-        <p className="text-[13px] text-muted-foreground">
-          {isCompany
-            ? "A new Canton party with its own key — hires contractors, approves invoices, runs payday."
-            : "A new Canton party with its own key — countersigns agreements and submits invoices."}
-        </p>
+        <p className="text-[13px] text-muted-foreground">{CREATE_META[role].blurb}</p>
         <div className="space-y-1.5">
           <Label htmlFor={`create-${role}-name`}>Name</Label>
           <Input
             id={`create-${role}-name`}
-            placeholder={isCompany ? "AcmeCo" : "Jane"}
+            placeholder={CREATE_META[role].placeholder}
             value={name}
             onChange={(e) => setName(e.target.value)}
             disabled={busy}
@@ -139,7 +157,7 @@ function LoadCard() {
     router.push(`/w/${wallet.fingerprint}`);
   };
 
-  const isCompany = found?.profile.role === "company";
+  const foundRole = found?.profile.role;
 
   return (
     <Card className="w-80">
@@ -177,23 +195,15 @@ function LoadCard() {
           }}
         />
         {error && <p className="text-xs font-semibold text-red-400">{error}</p>}
-        {found && (
+        {found && foundRole && (
           <div className="space-y-2 rounded-lg border border-border p-3">
             <p className="text-sm">
-              {isCompany ? (
-                <>
-                  This is a <span className="font-bold text-amber-400">company</span> profile:{" "}
-                  <span className="font-semibold">{found.profile.displayName}</span>
-                </>
-              ) : (
-                <>
-                  This is a <span className="font-bold text-teal-400">contractor</span> profile:{" "}
-                  <span className="font-semibold">{found.profile.displayName}</span>
-                </>
-              )}
+              This is a{" "}
+              <span className={`font-bold ${ROLE_META[foundRole].text}`}>{foundRole}</span>{" "}
+              profile: <span className="font-semibold">{found.profile.displayName}</span>
             </p>
             <Button className="w-full" onClick={load}>
-              Load {isCompany ? "Company" : "Contractor"} Profile
+              Load {foundRole.charAt(0).toUpperCase() + foundRole.slice(1)} Profile
             </Button>
           </div>
         )}
@@ -266,6 +276,7 @@ export function Landing() {
       <div className="flex flex-wrap justify-center gap-4 px-4">
         <CreateCard role="company" />
         <CreateCard role="contractor" />
+        <CreateCard role="auditor" />
         <LoadCard />
       </div>
       <DeviceWallets />

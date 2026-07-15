@@ -3,6 +3,7 @@
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { WalletShell } from "@/components/WalletShell";
+import { AuditorView } from "@/components/AuditorView";
 import { CompanyView } from "@/components/CompanyView";
 import { ContractorView } from "@/components/ContractorView";
 import { getWallet, type StoredWallet } from "@/wallet/keystore";
@@ -31,7 +32,13 @@ export default function WalletPage({
 
   return (
     <WalletShell wallet={wallet}>
-      {wallet.role === "company" ? <CompanyView /> : <ContractorView />}
+      {wallet.role === "company" ? (
+        <CompanyView />
+      ) : wallet.role === "auditor" ? (
+        <AuditorView />
+      ) : (
+        <ContractorView />
+      )}
     </WalletShell>
   );
 }

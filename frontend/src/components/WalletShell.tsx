@@ -15,6 +15,7 @@ const POLL_MS = 2500;
 const ROLE_BADGE: Record<StoredWallet["role"], string> = {
   company: "bg-amber-500 text-zinc-950",
   contractor: "bg-teal-500 text-zinc-950",
+  auditor: "bg-sky-500 text-zinc-950",
 };
 
 export function WalletShell({

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Zap } from "lucide-react";
+import { ShieldCheck, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -32,17 +32,26 @@ export function CompanyView() {
   const [contractor, setContractor] = useState("");
   const [role, setRole] = useState("");
   const [rate, setRate] = useState("");
+  const [auditorsDir, setAuditorsDir] = useState<ContractorEntry[]>([]);
+  const [auditor, setAuditor] = useState("");
 
-  // directory of contractor wallets on this Paydae instance (for the offer form)
+  // directories of contractor/auditor wallets on this Paydae instance
   useEffect(() => {
     let cancelled = false;
-    const poll = () =>
+    const poll = () => {
       fetch("/api/contractors", { cache: "no-store" })
         .then((r) => r.json())
         .then((list: ContractorEntry[]) => {
           if (!cancelled && Array.isArray(list)) setContractors(list);
         })
         .catch(() => undefined);
+      fetch("/api/auditors", { cache: "no-store" })
+        .then((r) => r.json())
+        .then((list: ContractorEntry[]) => {
+          if (!cancelled && Array.isArray(list)) setAuditorsDir(list);
+        })
+        .catch(() => undefined);
+    };
     void poll();
     const timer = setInterval(poll, CONTRACTORS_POLL_MS);
     return () => {
@@ -53,6 +62,7 @@ export function CompanyView() {
 
   if (!data || !profile) return null;
   const treasury = data.treasury ?? null;
+  const currentAuditors = Array.isArray(treasury?.auditors) ? treasury.auditors : [];
   const paydayTotal = data.approvedInvoices.reduce(
     (sum, inv) => sum + Number(inv.amount ?? 0),
     0,
@@ -156,6 +166,54 @@ export function CompanyView() {
           </CardContent>
         </Card>
       </div>
+
+      <SectionCard title="Auditor">
+        {currentAuditors.length ? (
+          <p className="mb-3 flex items-center gap-2 text-sm">
+            <ShieldCheck className="size-4 text-sky-400" />
+            <span>
+              <span className="font-bold text-sky-400">
+                {currentAuditors.map((a) => nameOf(a, data.partyNames)).join(", ")}
+              </span>{" "}
+              audits your books — they see every agreement, invoice and payment created since
+              designation. Read-only, enforced by the ledger.
+            </span>
+          </p>
+        ) : (
+          <p className="mb-3 text-sm text-muted-foreground">
+            No auditor designated. Designating one gives them read-only visibility of your
+            treasury and everything you create from then on — nobody else can see your books.
+          </p>
+        )}
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="min-w-56 flex-1 space-y-1.5">
+            <Label htmlFor="auditor-party">Auditor</Label>
+            <select
+              id="auditor-party"
+              value={auditor}
+              onChange={(e) => setAuditor(e.target.value)}
+              className="border-input h-9 w-full rounded-md border bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30 [&>option]:bg-popover [&>option]:text-popover-foreground"
+            >
+              <option value="">
+                {auditorsDir.length ? "Pick an auditor…" : "No auditor wallets yet"}
+              </option>
+              {auditorsDir.map((a) => (
+                <option key={a.partyId} value={a.partyId}>
+                  {a.displayName} ({a.partyId.slice(0, 18)}…)
+                </option>
+              ))}
+            </select>
+          </div>
+          <Button
+            variant="outline"
+            disabled={locked || !auditor || !treasury}
+            onClick={() => act("designateAuditor", { auditor }).then(() => setAuditor(""))}
+          >
+            <ShieldCheck className="size-4" />
+            Designate auditor
+          </Button>
+        </div>
+      </SectionCard>
 
       <SectionCard title="Open offers">
         {data.proposals.length ? (

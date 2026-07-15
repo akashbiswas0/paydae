@@ -1,4 +1,4 @@
-export type Role = "company" | "contractor";
+export type Role = "company" | "contractor" | "auditor";
 
 export interface ContractView {
   contractId: string;
@@ -11,6 +11,8 @@ export interface ContractView {
   hours?: string;
   memo?: string;
   balance?: string;
+  /** parties auditing this document (Optional [Party] on-ledger) */
+  auditors?: string[] | null;
 }
 
 export interface PaydaeState {
@@ -24,6 +26,8 @@ export interface PaydaeState {
   approvedInvoices: ContractView[];
   payments: ContractView[];
   treasury?: ContractView | null;
+  /** auditor role: every treasury whose company designated this auditor */
+  treasuries?: ContractView[];
 }
 
 export type ActionName =
@@ -33,7 +37,8 @@ export type ActionName =
   | "submitInvoice"
   | "approve"
   | "payAll"
-  | "bootstrapTreasury";
+  | "bootstrapTreasury"
+  | "designateAuditor";
 
 /** human-readable digest of a prepared transaction (from the backend) */
 export interface TxSummary {
