@@ -1,14 +1,12 @@
 {
-  "name": "paydae-wallet-gateway",
+  "name": "paydae-wallet-spike",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
-    "devnet": "./start-devnet.sh"
+    "spike": "node browser-spike.mjs"
   },
   "dependencies": {
-    "@canton-network/dapp-sdk": "1.4.0",
-    "@canton-network/wallet-gateway-remote": "1.4.0",
-    "@canton-network/wallet-sdk": "1.4.0"
+    "tweetnacl": "^1.0.3"
   }
 }
