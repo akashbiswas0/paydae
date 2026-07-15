@@ -135,6 +135,38 @@ curl -X POST "$LEDGER_API/v2/packages" -H "Authorization: Bearer $JWT" \
 The new `packageId` is the DAR's main package hash (`daml damlc inspect-dar` shows it);
 put it in `config.json`. `scripts/devnet.sh` wraps token/upload/acs helpers.
 
+### 3.1 Upgrading a live package (proven on devnet)
+
+Canton enforces **smart-contract upgrade rules** at upload time:
+
+- Re-uploading the same package name + version with different code is rejected
+  (`KNOWN_PACKAGE_VERSION`) — bump `version:` in `daml.yaml`.
+- A higher version of the same package name must be a *valid upgrade*: every field you add
+  to an existing template must be `Optional` (`NOT_VALID_UPGRADE_PACKAGE` otherwise).
+- The payoff: contracts created under the old version keep working — the ledger up-converts
+  them on exercise, reading the new `Optional` field as `None`. No data migration.
+
+After upload: update `packageId` in `config.json` and **restart the backend** (config is read
+at import time; a TS file watcher won't reload a JSON edit).
+
+### 3.2 Auditor / selective-disclosure pattern (proven end-to-end)
+
+The canonical Canton demo of read-only disclosure — a party that sees everything a company
+does without any authority to act:
+
+- Add `auditors : Optional [Party]` to every template and put it in the `observer` clause
+  (`observer fromOptional [] auditors`). Optional keeps it a valid upgrade (§3.1).
+- Pick ONE contract as the registry of who audits the company (here: `Treasury`) and give it
+  a company-controlled choice `SetAuditors` — designation is itself a wallet-signed action.
+- The backend copies the registry's auditor list onto every new root contract it builds
+  (here: proposals); `create ... with ..` record puns propagate it down the whole choice
+  chain for free (only field-by-field `create`s need the field added explicitly).
+- The auditor is just another external party (§4) with **zero extra rights** and no
+  post-onboarding signing. Reads (§6) work unchanged: the ACS and update-by-id receipts
+  are stakeholder-gated by the ledger itself, so an auditor sees designated companies'
+  documents and gets "not found" for everything else — no backend authorization code.
+- JSON encoding: `Optional [Party]` is `null` for `None`, a plain array for `Some`.
+
 ---
 
 ## 4. Wallet onboarding (browser-key external party)
