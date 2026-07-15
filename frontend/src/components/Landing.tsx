@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Role } from "@/lib/types";
 import { forgetWallet, listWallets, type StoredWallet } from "@/wallet/keystore";
-import { downloadKeyFile } from "@/wallet/keystore";
 import {
   createWallet,
   importWallet,
@@ -65,8 +64,6 @@ function CreateCard({ role }: { role: Role }) {
       const wallet = await createWallet(role, name.trim(), {
         treasuryBalance: Number(balance) || 50000,
       });
-      setStep("Downloading your key file — it is the ONLY copy…");
-      downloadKeyFile(wallet);
       router.push(`/w/${wallet.fingerprint}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -115,8 +112,8 @@ function CreateCard({ role }: { role: Role }) {
         {step && busy && <p className="text-xs text-muted-foreground">{step}</p>}
         {error && <p className="text-xs font-semibold text-red-400">{error}</p>}
         <p className="text-[11px] leading-snug text-muted-foreground">
-          The key is generated in your browser and downloaded as a file. Keep it — it is the only
-          way to load this wallet again.
+          The key is generated in your browser and stays here. Use the download button in your
+          wallet to save the key file — it is the only way to load this wallet on another machine.
         </p>
       </CardContent>
     </Card>

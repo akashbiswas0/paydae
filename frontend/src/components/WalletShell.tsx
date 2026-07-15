@@ -53,7 +53,7 @@ export function WalletShell({
         </Link>
         <div className="flex items-center gap-2.5">
           <button
-            title="Download the key file again"
+            title="Download the key file — the only way to restore this wallet elsewhere"
             className="cursor-pointer rounded-lg border border-border p-2 text-muted-foreground hover:text-foreground"
             onClick={() => downloadKeyFile(wallet)}
           >
