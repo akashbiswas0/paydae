@@ -21,23 +21,23 @@ export const ROLE_META: Record<
 > = {
   company: {
     label: "Company",
-    chip: "bg-indigo-50 text-indigo-700",
-    dot: "bg-indigo-500",
-    text: "text-indigo-600",
+    chip: "bg-primary/10 text-primary",
+    dot: "bg-primary",
+    text: "text-primary",
     icon: <Building2 className="size-4" />,
   },
   contractor: {
     label: "Contractor",
-    chip: "bg-teal-50 text-teal-700",
-    dot: "bg-teal-500",
-    text: "text-teal-600",
+    chip: "bg-brand-mint text-emerald-900 dark:text-emerald-100",
+    dot: "bg-emerald-500",
+    text: "text-emerald-700 dark:text-emerald-300",
     icon: <HardHat className="size-4" />,
   },
   auditor: {
     label: "Auditor",
-    chip: "bg-sky-50 text-sky-700",
+    chip: "bg-brand-sky text-sky-900 dark:text-sky-100",
     dot: "bg-sky-500",
-    text: "text-sky-600",
+    text: "text-sky-700 dark:text-sky-300",
     icon: <ShieldCheck className="size-4" />,
   },
 };

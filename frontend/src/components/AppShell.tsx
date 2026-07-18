@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { ROLE_META } from "@/lib/roles";
 import { downloadKeyFile, type StoredWallet } from "@/wallet/keystore";
 import { Avatar } from "./Primitives";
+import { LogoGlyph } from "./BrandMark";
 
 export interface NavItem {
   key: string;
@@ -40,11 +41,9 @@ export function AppShell({
     <div className="flex min-h-screen bg-background">
       {/* Sidebar */}
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-border bg-sidebar px-3 py-4 md:flex">
-        <Link href="/" className="mb-6 flex items-center gap-2 px-2">
-          <span className="inline-flex size-8 items-center justify-center rounded-lg bg-primary text-base font-bold text-primary-foreground">
-            P
-          </span>
-          <span className="text-lg font-semibold tracking-tight">Paydae</span>
+        <Link href="/" className="mb-6 flex min-h-10 items-center gap-2 rounded-lg px-2 focus-visible:ring-2 focus-visible:ring-ring">
+          <LogoGlyph className="size-8 rounded-lg" />
+          <span className="text-lg font-semibold tracking-[-0.04em]">paydae</span>
         </Link>
         <nav className="flex flex-col gap-1">
           {nav.map((item) => (
@@ -80,8 +79,9 @@ export function AppShell({
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-border bg-card/80 px-5 py-3 backdrop-blur">
           <div className="flex items-center gap-2">
-            <Link href="/" className="text-base font-semibold tracking-tight md:hidden">
-              Paydae
+            <Link href="/" aria-label="Paydae home" className="flex min-h-10 items-center gap-2 rounded-lg text-base font-semibold tracking-[-0.04em] focus-visible:ring-2 focus-visible:ring-ring md:hidden">
+              <LogoGlyph className="size-7 rounded-lg" />
+              paydae
             </Link>
             <span className="hidden text-base font-semibold tracking-tight md:inline">{title}</span>
           </div>

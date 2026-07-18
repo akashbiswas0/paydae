@@ -9,6 +9,7 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Check, Copy, FilePlus2, FileX2, ShieldCheck } from "lucide-react";
+import { BrandMark } from "@/components/BrandMark";
 import { getWallet, type StoredWallet } from "@/wallet/keystore";
 import { nameOf } from "@/lib/types";
 
@@ -92,12 +93,10 @@ export default function TxReceiptPage({
   return (
     <div className="mx-auto w-full max-w-3xl px-5 pb-20 pt-6">
       <header className="mb-7 flex items-center justify-between">
-        <Link href="/" className="text-2xl font-extrabold tracking-tight">
-          Paydae
-          <span className="ml-2 text-sm font-medium text-muted-foreground">
-            private payroll on Canton
-          </span>
-        </Link>
+        <div className="flex items-center gap-3">
+          <BrandMark />
+          <span className="hidden text-sm font-medium text-muted-foreground sm:inline">private payroll on Canton</span>
+        </div>
         {wallet && (
           <Link
             href={`/w/${fingerprint}`}
