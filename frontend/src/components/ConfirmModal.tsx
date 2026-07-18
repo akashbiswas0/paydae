@@ -34,7 +34,7 @@ export function ConfirmModal({ wallet }: { wallet: StoredWallet }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
         <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-          <ShieldCheck className="size-4 text-emerald-400" />
+          <ShieldCheck className="size-4 text-emerald-600" />
           Wallet signature request
         </div>
         <h2 className="text-xl font-extrabold tracking-tight">{pending.summary.title}</h2>
@@ -74,11 +74,7 @@ export function ConfirmModal({ wallet }: { wallet: StoredWallet }) {
           >
             Reject
           </Button>
-          <Button
-            className="flex-1 bg-emerald-500 font-bold text-zinc-950 hover:bg-emerald-400"
-            disabled={busy}
-            onClick={approve}
-          >
+          <Button className="flex-1 font-semibold" disabled={busy} onClick={approve}>
             {busy ? "Submitting…" : "Approve & sign"}
           </Button>
         </div>

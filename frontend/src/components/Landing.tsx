@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, HardHat, KeyRound, ShieldCheck, Trash2 } from "lucide-react";
+import { KeyRound, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Role } from "@/lib/types";
+import { ROLE_META, initials } from "@/lib/roles";
 import { forgetWallet, listWallets, type StoredWallet } from "@/wallet/keystore";
 import {
   createWallet,
@@ -17,35 +18,27 @@ import {
 } from "@/wallet/onboarding";
 import type { parseKeyFile } from "@/wallet/keystore";
 
-const ROLE_META: Record<Role, { badge: string; text: string; label: string }> = {
-  company: { badge: "bg-amber-500 text-zinc-950", text: "text-amber-400", label: "COMPANY" },
-  contractor: { badge: "bg-teal-500 text-zinc-950", text: "text-teal-400", label: "CONTRACTOR" },
-  auditor: { badge: "bg-sky-500 text-zinc-950", text: "text-sky-400", label: "AUDITOR" },
-};
-
-const CREATE_META: Record<Role, { icon: React.ReactNode; title: string; blurb: string; placeholder: string }> = {
+const CREATE_META: Record<Role, { title: string; blurb: string; placeholder: string }> = {
   company: {
-    icon: <Building2 className="size-4" />,
-    title: "Create Company",
-    blurb: "A new Canton party with its own key — hires contractors, approves invoices, runs payday.",
+    title: "Company",
+    blurb: "A Canton party with its own key — hires contractors, approves invoices, runs payday.",
     placeholder: "AcmeCo",
   },
   contractor: {
-    icon: <HardHat className="size-4" />,
-    title: "Create Contractor",
-    blurb: "A new Canton party with its own key — countersigns agreements and submits invoices.",
+    title: "Contractor",
+    blurb: "A Canton party with its own key — countersigns agreements and submits invoices.",
     placeholder: "Jane",
   },
   auditor: {
-    icon: <ShieldCheck className="size-4" />,
-    title: "Create Auditor",
-    blurb: "A read-only Canton party — sees the full books of any company that designates it, nothing else.",
+    title: "Auditor",
+    blurb: "A read-only Canton party — sees the full books of any company that designates it.",
     placeholder: "Ava Audit",
   },
 };
 
 function CreateCard({ role }: { role: Role }) {
   const router = useRouter();
+  const meta = ROLE_META[role];
   const [name, setName] = useState("");
   const [balance, setBalance] = useState("50000");
   const [busy, setBusy] = useState(false);
@@ -58,7 +51,6 @@ function CreateCard({ role }: { role: Role }) {
     setError(null);
     try {
       setStep("Generating your key in this browser…");
-      // small delay so the step is visible before the network round-trips
       await new Promise((r) => setTimeout(r, 300));
       setStep(isCompany ? "Onboarding party + creating treasury on Canton…" : "Onboarding party on Canton…");
       const wallet = await createWallet(role, name.trim(), {
@@ -73,11 +65,16 @@ function CreateCard({ role }: { role: Role }) {
   };
 
   return (
-    <Card className="w-80">
-      <CardContent className="space-y-3 pt-1">
-        <div className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-extrabold ${ROLE_META[role].badge}`}>
-          {CREATE_META[role].icon}
-          {CREATE_META[role].title}
+    <Card className="w-80 shadow-sm">
+      <CardContent className="space-y-3">
+        <div className="flex items-center gap-2.5">
+          <span className={`inline-flex size-9 items-center justify-center rounded-lg ${meta.chip}`}>
+            {meta.icon}
+          </span>
+          <div>
+            <p className="font-semibold leading-tight">Create {CREATE_META[role].title}</p>
+            <p className="text-xs text-muted-foreground">New Canton party</p>
+          </div>
         </div>
         <p className="text-[13px] text-muted-foreground">{CREATE_META[role].blurb}</p>
         <div className="space-y-1.5">
@@ -110,10 +107,10 @@ function CreateCard({ role }: { role: Role }) {
           {busy ? "Creating…" : "Create wallet"}
         </Button>
         {step && busy && <p className="text-xs text-muted-foreground">{step}</p>}
-        {error && <p className="text-xs font-semibold text-red-400">{error}</p>}
+        {error && <p className="text-xs font-semibold text-destructive">{error}</p>}
         <p className="text-[11px] leading-snug text-muted-foreground">
-          The key is generated in your browser and stays here. Use the download button in your
-          wallet to save the key file — it is the only way to load this wallet on another machine.
+          The key is generated in your browser and stays here. Use the download button in your wallet to
+          save the key file — it is the only way to load this wallet on another machine.
         </p>
       </CardContent>
     </Card>
@@ -157,11 +154,16 @@ function LoadCard() {
   const foundRole = found?.profile.role;
 
   return (
-    <Card className="w-80">
-      <CardContent className="space-y-3 pt-1">
-        <div className="inline-flex items-center gap-2 rounded-lg bg-violet-500 px-3 py-1.5 text-sm font-extrabold text-zinc-950">
-          <KeyRound className="size-4" />
-          Load Wallet
+    <Card className="w-80 shadow-sm">
+      <CardContent className="space-y-3">
+        <div className="flex items-center gap-2.5">
+          <span className="inline-flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+            <KeyRound className="size-4" />
+          </span>
+          <div>
+            <p className="font-semibold leading-tight">Load Wallet</p>
+            <p className="text-xs text-muted-foreground">Import an existing key</p>
+          </div>
         </div>
         <p className="text-[13px] text-muted-foreground">
           Already have a Paydae key file? Import it to reconnect to your party — on any machine.
@@ -173,34 +175,28 @@ function LoadCard() {
           className="hidden"
           onChange={(e) => onFile(e.target.files?.[0])}
         />
-        <Button
-          variant="outline"
-          className="w-full"
-          disabled={busy}
-          onClick={() => fileInput.current?.click()}
-        >
+        <Button variant="outline" className="w-full" disabled={busy} onClick={() => fileInput.current?.click()}>
           {busy ? "Checking key…" : "Choose key file…"}
         </Button>
         <textarea
           placeholder="…or paste the key file contents here"
           rows={2}
           disabled={busy}
-          className="border-input w-full rounded-md border bg-transparent px-3 py-2 font-mono text-[11px] shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
+          className="border-input w-full rounded-lg border bg-transparent px-3 py-2 font-mono text-[11px] outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           onChange={(e) => {
             const text = e.target.value.trim();
             if (text.startsWith("{") && text.endsWith("}")) void inspect(text);
           }}
         />
-        {error && <p className="text-xs font-semibold text-red-400">{error}</p>}
+        {error && <p className="text-xs font-semibold text-destructive">{error}</p>}
         {found && foundRole && (
           <div className="space-y-2 rounded-lg border border-border p-3">
             <p className="text-sm">
-              This is a{" "}
-              <span className={`font-bold ${ROLE_META[foundRole].text}`}>{foundRole}</span>{" "}
-              profile: <span className="font-semibold">{found.profile.displayName}</span>
+              This is a <span className={`font-semibold ${ROLE_META[foundRole].text}`}>{foundRole}</span> profile:{" "}
+              <span className="font-semibold">{found.profile.displayName}</span>
             </p>
             <Button className="w-full" onClick={load}>
-              Load {foundRole.charAt(0).toUpperCase() + foundRole.slice(1)} Profile
+              Load {ROLE_META[foundRole].label} Profile
             </Button>
           </div>
         )}
@@ -221,39 +217,41 @@ function DeviceWallets() {
 
   return (
     <div className="w-full max-w-3xl px-4">
-      <p className="mb-2 text-[13px] font-semibold uppercase tracking-[1.2px] text-muted-foreground">
+      <p className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-muted-foreground">
         Wallets on this device
       </p>
-      <div className="flex flex-wrap gap-2.5">
-        {wallets.map((w) => (
-          <div
-            key={w.fingerprint}
-            className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2"
-          >
-            <button
-              className="cursor-pointer text-left"
-              onClick={() => router.push(`/w/${w.fingerprint}`)}
-            >
-              <span className={`mr-2 rounded px-1.5 py-0.5 text-[10px] font-extrabold ${ROLE_META[w.role].badge}`}>
-                {ROLE_META[w.role].label}
-              </span>
-              <span className="text-sm font-bold">{w.displayName}</span>
-              <span className="ml-2 font-mono text-[11px] text-muted-foreground">
-                {w.partyId.slice(0, 18)}…
-              </span>
-            </button>
-            <button
-              title="Forget on this device (the key file still works)"
-              className="cursor-pointer text-muted-foreground hover:text-red-400"
-              onClick={() => {
-                forgetWallet(w.fingerprint);
-                setWallets(listWallets());
-              }}
-            >
-              <Trash2 className="size-3.5" />
-            </button>
-          </div>
-        ))}
+      <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+        {wallets.map((w) => {
+          const meta = ROLE_META[w.role];
+          return (
+            <div key={w.fingerprint} className="flex items-center gap-3 px-4 py-3">
+              <button
+                className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left"
+                onClick={() => router.push(`/w/${w.fingerprint}`)}
+              >
+                <span className={`inline-flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${meta.chip}`}>
+                  {initials(w.displayName)}
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold">{w.displayName}</span>
+                  <span className="block truncate font-mono text-[11px] text-muted-foreground">
+                    {meta.label} · {w.partyId.slice(0, 22)}…
+                  </span>
+                </span>
+              </button>
+              <button
+                title="Forget on this device (the key file still works)"
+                className="cursor-pointer text-muted-foreground hover:text-destructive"
+                onClick={() => {
+                  forgetWallet(w.fingerprint);
+                  setWallets(listWallets());
+                }}
+              >
+                <Trash2 className="size-4" />
+              </button>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -261,16 +259,21 @@ function DeviceWallets() {
 
 export function Landing() {
   return (
-    <main className="flex flex-1 flex-col items-center gap-5 pt-[8vh]">
-      <h1 className="text-5xl font-extrabold tracking-tight">Paydae</h1>
-      <p className="text-muted-foreground">
-        Confidential contractor payroll on Canton — your key, your signature, your party.
+    <main className="flex flex-1 flex-col items-center gap-5 px-4 pt-[7vh]">
+      <div className="flex items-center gap-2">
+        <span className="inline-flex size-9 items-center justify-center rounded-lg bg-primary text-lg font-bold text-primary-foreground">
+          P
+        </span>
+        <span className="text-2xl font-semibold tracking-tight">Paydae</span>
+      </div>
+      <h1 className="max-w-2xl text-center text-4xl font-semibold tracking-tight sm:text-5xl">
+        Confidential contractor payroll on Canton
+      </h1>
+      <p className="max-w-xl text-center text-[15px] text-muted-foreground">
+        Your key, your signature, your party. No gas, no funding step — create a wallet and transact
+        immediately. Every action is signed in your browser with a key only you hold.
       </p>
-      <p className="mb-2 max-w-xl px-4 text-center text-[13px] text-muted-foreground">
-        No gas, no funding step: Canton has no per-transaction fee for users. Create a wallet and
-        transact immediately — every action is signed in your browser with a key only you hold.
-      </p>
-      <div className="flex flex-wrap justify-center gap-4 px-4">
+      <div className="mt-2 flex flex-wrap justify-center gap-4">
         <CreateCard role="company" />
         <CreateCard role="contractor" />
         <CreateCard role="auditor" />

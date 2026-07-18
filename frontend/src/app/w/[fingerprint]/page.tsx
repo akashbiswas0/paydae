@@ -33,11 +33,11 @@ export default function WalletPage({
   return (
     <WalletShell wallet={wallet}>
       {wallet.role === "company" ? (
-        <CompanyView />
+        <CompanyView wallet={wallet} />
       ) : wallet.role === "auditor" ? (
-        <AuditorView />
+        <AuditorView wallet={wallet} />
       ) : (
-        <ContractorView />
+        <ContractorView wallet={wallet} />
       )}
     </WalletShell>
   );

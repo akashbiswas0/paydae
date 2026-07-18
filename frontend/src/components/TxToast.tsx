@@ -39,11 +39,11 @@ export function TxToast() {
       href={`/w/${profile.fingerprint}/tx/${updateId}`}
       onClick={() => dispatch(clearUpdateId())}
       title="View transaction receipt"
-      className="fixed bottom-6 left-1/2 z-50 flex max-w-[92vw] -translate-x-1/2 cursor-pointer items-center gap-2.5 rounded-lg border border-emerald-700 bg-emerald-950 px-4 py-3 text-sm text-emerald-200 shadow-lg hover:border-emerald-500"
+      className="fixed bottom-6 left-1/2 z-50 flex max-w-[92vw] -translate-x-1/2 cursor-pointer items-center gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 shadow-lg hover:border-emerald-300"
     >
-      <span className="size-2 shrink-0 rounded-full bg-emerald-400" />
+      <span className="size-2 shrink-0 rounded-full bg-emerald-500" />
       <span className="font-semibold">Committed on Canton</span>
-      <span className="font-mono text-xs text-emerald-300/80 underline decoration-emerald-600 underline-offset-2">
+      <span className="font-mono text-xs text-emerald-600 underline decoration-emerald-300 underline-offset-2">
         tx {updateId.slice(0, 10)}…{updateId.slice(-6)}
       </span>
       <span

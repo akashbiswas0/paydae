@@ -16,7 +16,7 @@ export function ErrorToast() {
 
   if (!error) return null;
   return (
-    <div className="fixed bottom-6 left-1/2 z-50 max-w-[90vw] -translate-x-1/2 rounded-lg border border-red-700 bg-red-950 px-5 py-3 text-sm font-semibold text-red-200 shadow-lg">
+    <div className="fixed bottom-6 left-1/2 z-50 max-w-[90vw] -translate-x-1/2 rounded-lg border border-red-200 bg-red-50 px-5 py-3 text-sm font-semibold text-red-700 shadow-lg">
       Ledger error: {error}
     </div>
   );

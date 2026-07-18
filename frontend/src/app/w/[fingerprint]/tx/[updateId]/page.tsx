@@ -110,7 +110,7 @@ export default function TxReceiptPage({
       </header>
 
       <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-        <ShieldCheck className="size-4 text-emerald-400" />
+        <ShieldCheck className="size-4 text-emerald-600" />
         Transaction receipt
       </div>
       <button
@@ -122,14 +122,14 @@ export default function TxReceiptPage({
           {updateId}
         </span>
         {copied ? (
-          <Check className="size-4 shrink-0 text-emerald-400" />
+          <Check className="size-4 shrink-0 text-emerald-600" />
         ) : (
           <Copy className="size-4 shrink-0 text-muted-foreground group-hover:text-foreground" />
         )}
       </button>
 
       {error && (
-        <div className="mt-6 rounded-lg border border-red-800 bg-red-950/50 p-4 text-sm text-red-200">
+        <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
           {error}
         </div>
       )}
@@ -146,9 +146,9 @@ export default function TxReceiptPage({
               <div key={`${ev.kind}-${ev.contractId}`} className="rounded-xl border border-border bg-card p-4">
                 <div className="flex items-center gap-2">
                   {ev.kind === "created" ? (
-                    <FilePlus2 className="size-4 text-emerald-400" />
+                    <FilePlus2 className="size-4 text-emerald-600" />
                   ) : (
-                    <FileX2 className="size-4 text-amber-500" />
+                    <FileX2 className="size-4 text-amber-600" />
                   )}
                   <span className="font-bold">
                     {ev.kind === "created" ? "Created" : "Archived"} {ev.entity}
