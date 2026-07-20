@@ -1,4 +1,4 @@
-# Paydae — Confidential Contractor Payroll on Canton
+# Paydae : Confidential Contractor Payroll on Canton
 
 **Web3 Deel.** Agreement + invoice + payment as one private, atomic workflow on the
 Canton Network. Payday for every contractor is **one atomic transaction**, and each
@@ -20,21 +20,7 @@ Canton **Devnet** (Seaport sandbox validator, `fivenorth.io`).
    debits the treasury — in a single Canton transaction. Insufficient balance means
    *nothing* happens (also covered by a test).
 
-## Architecture
 
-```
-┌──────────────────────────┐      ┌──────────────────┐      ┌──────────────────────┐
-│  frontend/ (Next.js :3000)│      │ backend/ (:4000) │      │  JSON Ledger API v2  │
-│  /company  ·  /c/alice   │◄────►│  Express + TS    │◄────►│  Devnet validator    │
-│  /c/bob                  │ REST │  holds creds,    │ JWT  │  (Canton Network)    │
-│  TS · Tailwind · shadcn  │proxy │  talks to ledger │      │  paydae DAR + parties│
-│  Redux Toolkit           │      │                  │      │                      │
-└──────────────────────────┘      └──────────────────┘      └──────────────────────┘
-```
-
-- **Daml** ([daml/daml/Paydae.daml](daml/daml/Paydae.daml)): `AgreementProposal → Agreement → Invoice → ApprovedInvoice → Payment`, plus `Treasury` with the atomic `PayAllApproved` choice.
-- **Backend** ([backend/](backend/src/index.ts)): Express + TypeScript (100 % TS, run with `tsx`). Mints and caches the OIDC JWT (re-mints on 401 / >7h), translates persona REST calls (`GET /api/state`, `POST /api/action`) into ledger commands/ACS queries. The browser never sees credentials.
-- **Frontend** ([frontend/](frontend/src/app)): Next.js (App Router) + TypeScript + Tailwind CSS + shadcn/ui + Redux Toolkit. Dark theme, one route per persona with a big colored badge (company amber, Alice teal, Bob violet). Polls state every 2.5 s through a Redux async thunk; `/api/*` is rewritten to the Express backend so the browser stays same-origin.
 
 ## Privacy matrix (who sees what)
 
