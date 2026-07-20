@@ -1,23 +1,23 @@
 # Paydae : Confidential Contractor Payroll on Canton
 
-**Web3 Deel.** Agreement + invoice + payment as one private, atomic workflow on the
+Agreement + invoice + payment as one private, atomic workflow on the
 Canton Network. Payday for every contractor is **one atomic transaction**, and each
 contractor's terms, invoices, and payments are **invisible to everyone else** — not
 because the app filters them out, but because Canton's validator never distributes
-those contracts to non-stakeholders in the first place.
+those contracts to non stakeholders in the first place.
 
-Built for the Canton Network hackathon (July 2026). Verified end-to-end against
+Built for the Canton Network hackathon (July 2026). Verified end to end against
 Canton **Devnet** (Seaport sandbox validator, `fivenorth.io`).
 
 ## The two moments that matter
 
 1. **Privacy is the ledger's, not the app's.** Open Alice's and Bob's tabs side by
    side: each sees only their own agreement, rate, invoices, and payments. Alice's
-   data never reaches Bob's party — `queryContractId` as Bob on Alice's agreement
+   data never reaches Bob's party : `queryContractId` as Bob on Alice's agreement
    returns `None` at the ledger level (covered by a script test).
-2. **One-click atomic payday.** `Treasury.PayAllApproved` fetches every approved
+2. **One click atomic payday.** `Treasury.PayAllApproved` fetches every approved
    invoice, checks the balance covers the total, marks each invoice paid, and
-   debits the treasury — in a single Canton transaction. Insufficient balance means
+   debits the treasury : in a single Canton transaction. Insufficient balance means
    *nothing* happens (also covered by a test).
 
 
@@ -27,21 +27,21 @@ Canton **Devnet** (Seaport sandbox validator, `fivenorth.io`).
 | Contract | Company | Alice | Bob | Why |
 |---|---|---|---|---|
 | Alice's AgreementProposal | ✅ | ✅ | ❌ | signatory company, observer Alice |
-| Alice's Agreement / Invoice / ApprovedInvoice | ✅ | ✅ | ❌ | dual-signed company + Alice |
+| Alice's Agreement / Invoice / ApprovedInvoice | ✅ | ✅ | ❌ | dual signed company + Alice |
 | Alice's Payment | ✅ | ✅ | ❌ | signatory company, observer Alice |
 | Bob's contracts | ✅ | ❌ | ✅ | symmetric |
 | Treasury (balance) | ✅ | ❌ | ❌ | signatory company only |
 
 This is enforced by Canton's distribution model: a validator only receives contracts
-where its parties are stakeholders. There is no server-side filtering to get wrong.
+where its parties are stakeholders. There is no server side filtering to get wrong.
 
 ## Contract flow
 
-1. Company creates `AgreementProposal` (role, hourly rate) — contractor is observer.
-2. Contractor exercises `Countersign` → dual-signed `Agreement`.
+1. Company creates `AgreementProposal` (role, hourly rate) : contractor is observer.
+2. Contractor exercises `Countersign` → dual signed `Agreement`.
 3. Contractor exercises `SubmitInvoice` (hours, memo) → `Invoice` with `amount = hours × hourlyRate` (valid because the Agreement carries both authorities).
 4. Company exercises `Approve` → `ApprovedInvoice`.
-5. Company exercises `Treasury.PayAllApproved([cids])` → each invoice's `MarkPaid` fires, `Payment`s are created, treasury is recreated with `balance − total`. The `MarkPaid` indirection is required: the company alone can't archive a dual-signed contract, but it *can* exercise a company-controlled choice on it.
+5. Company exercises `Treasury.PayAllApproved([cids])` → each invoice's `MarkPaid` fires, `Payment`s are created, treasury is recreated with `balance − total`. The `MarkPaid` indirection is required: the company alone can't archive a dual signed contract, but it *can* exercise a company controlled choice on it.
 
 ## Setup
 
@@ -77,7 +77,7 @@ node scripts/reset.mjs
   - `PaydaeAlice::1220a14ca128063b8dc9d1ebb0bd22633be9f2168500f4dbc1ecaeb1855b14e5acf8`
   - `PaydaeBob::1220a14ca128063b8dc9d1ebb0bd22633be9f2168500f4dbc1ecaeb1855b14e5acf8`
 - Ledger user: `6` (see [config.json](config.json))
-- Verified 2026-07-12 in a real-browser e2e run (and re-verified 2026-07-13 on the
+- Verified 2026-07-12 in a real-browser e2e run (and reverified 2026-07-13 on the
   Next.js + Express stack): treasury bootstrapped at $50,000; offers (Designer
   $70/h, Engineer $85/h) countersigned; invoices 40 h ($2,800) and 10 h ($850)
   approved; one `PayAllApproved` debited exactly $3,650 → $46,350; both
