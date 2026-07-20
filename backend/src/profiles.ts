@@ -6,7 +6,8 @@ import path from 'node:path';
 import { REPO_ROOT } from './env.js';
 import type { Profile, Role } from './types.js';
 
-const DB_PATH = path.join(REPO_ROOT, 'backend', 'profiles.sqlite');
+// PROFILES_DB lets hosted deploys point at a persistent volume (e.g. /data/profiles.sqlite).
+const DB_PATH = process.env.PROFILES_DB ?? path.join(REPO_ROOT, 'backend', 'profiles.sqlite');
 
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
