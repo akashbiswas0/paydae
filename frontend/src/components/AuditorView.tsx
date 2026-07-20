@@ -57,10 +57,10 @@ export function AuditorView({ wallet }: { wallet: StoredWallet }) {
   if (!companies.length) {
     return shell(
       <>
-        <PageHeader title="Audit books" description="Read-only visibility of every company that designates you." />
+        <PageHeader title="Audit books" />
         <EmptyState icon={<ShieldCheck className="size-5" />} title="No companies have designated you yet">
           When a company designates you as its auditor, its treasury and every agreement, invoice and
-          payment it creates will appear here automatically — delivered by the ledger itself, not by the app.
+          payment it creates will appear here automatically.
         </EmptyState>
       </>,
     );
@@ -68,10 +68,7 @@ export function AuditorView({ wallet }: { wallet: StoredWallet }) {
 
   return shell(
     <>
-      <PageHeader
-        title="Audit books"
-        description="Canton delivers only the contracts you are a stakeholder of. This view is entirely read-only."
-      />
+      <PageHeader title="Audit books" />
       {companies.map((company) => {
         const treasury = treasuries.find((t) => t.company === company);
         const agreements = forCompany(data.agreements, company);

@@ -141,7 +141,7 @@ export function ContractorView({ wallet }: { wallet: StoredWallet }) {
           </div>
         </>
       ) : (
-        <EmptyNote>No active agreement yet — accept an offer first.</EmptyNote>
+        <EmptyNote>No active agreement yet.</EmptyNote>
       )}
     </SectionCard>
   );
@@ -151,7 +151,7 @@ export function ContractorView({ wallet }: { wallet: StoredWallet }) {
       case "dashboard":
         return (
           <>
-            <PageHeader title="Dashboard" description="Your agreement, outstanding invoices and total earnings." />
+            <PageHeader title="Dashboard" />
             <div className="mb-4 grid gap-4 sm:grid-cols-3">
               <StatCard
                 label="Total earned"
@@ -183,7 +183,7 @@ export function ContractorView({ wallet }: { wallet: StoredWallet }) {
       case "offers":
         return (
           <>
-            <PageHeader title="Offers" description="Countersign an offer to turn it into an active agreement." />
+            <PageHeader title="Offers" />
             {offersCard}
           </>
         );
@@ -191,7 +191,7 @@ export function ContractorView({ wallet }: { wallet: StoredWallet }) {
       case "agreement":
         return (
           <>
-            <PageHeader title="Agreement" description="Submit invoices against your active agreement." />
+            <PageHeader title="Agreement" />
             {agreementCard}
           </>
         );
@@ -199,7 +199,7 @@ export function ContractorView({ wallet }: { wallet: StoredWallet }) {
       case "invoices":
         return (
           <>
-            <PageHeader title="Invoices" description="Invoices you have submitted and their approval status." />
+            <PageHeader title="Invoices" />
             <SectionCard title="My invoices">
               {invoices.length ? (
                 invoices.map((inv) => (
@@ -220,7 +220,7 @@ export function ContractorView({ wallet }: { wallet: StoredWallet }) {
       case "payments":
         return (
           <>
-            <PageHeader title="Payments" description="Payments settled to you on Canton." />
+            <PageHeader title="Payments" />
             <SectionCard title="My payments">
               {data.payments.length ? (
                 data.payments.map((p) => (

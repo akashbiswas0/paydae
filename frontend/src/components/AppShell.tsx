@@ -88,10 +88,11 @@ export function AppShell({
           <div className="flex items-center gap-2.5">
             <button
               title="Download the key file — the only way to restore this wallet elsewhere"
-              className="inline-flex size-9 cursor-pointer items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-border px-2.5 text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
               onClick={() => downloadKeyFile(wallet)}
             >
               <Download className="size-4" />
+              <span className="hidden sm:inline">Download wallet</span>
             </button>
             <div className="flex items-center gap-2.5 rounded-lg border border-border py-1 pl-1 pr-3">
               <Avatar name={wallet.displayName} chip={meta.chip} className="size-7" />

@@ -7,7 +7,6 @@ import { motion, useReducedMotion } from "framer-motion";
 import {
   ArrowLeft,
   ArrowRight,
-  BadgeCheck,
   Building2,
   Check,
   HardHat,
@@ -87,7 +86,7 @@ export function RoleOnboarding({ role }: { role: Role }) {
   const content = ROLE_CONTENT[role];
   const isCompany = role === "company";
   const [name, setName] = useState("");
-  const [balance, setBalance] = useState("50000");
+  const [balance, setBalance] = useState("5000000");
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -101,7 +100,7 @@ export function RoleOnboarding({ role }: { role: Role }) {
       await new Promise((resolve) => setTimeout(resolve, 300));
       setStep(isCompany ? "Creating your Canton party and treasury…" : "Creating your Canton party…");
       const wallet = await createWallet(role, name.trim(), {
-        treasuryBalance: Number(balance) || 50000,
+        treasuryBalance: Number(balance) || 5000000,
       });
       router.push(`/w/${wallet.fingerprint}`);
     } catch (err) {
@@ -156,14 +155,14 @@ export function RoleOnboarding({ role }: { role: Role }) {
                   ))}
                 </div>
               </div>
-              <div className="relative mt-10 flex items-center gap-3 rounded-2xl bg-primary/[0.07] px-4 py-3 text-sm font-medium text-foreground">
+              <div className="relative mt-10 flex items-start gap-3 rounded-2xl bg-primary/[0.07] px-4 py-3 text-sm font-medium text-foreground">
                 <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-card text-primary shadow-sm"><LockKeyhole className="size-4" aria-hidden="true" /></span>
-                <span>Your private key never leaves this browser.</span>
+                <span>Private by default on Canton — every transaction is confidential, so no one outside the deal can see yours. Your key stays in this browser.</span>
               </div>
             </motion.section>
 
-            <motion.section {...motionProps(TIMING.form, 0, 18)} className="flex items-center">
-              <div className="w-full rounded-[2rem] border border-border bg-card p-6 shadow-[0_24px_70px_-40px_color-mix(in_oklch,var(--foreground)_40%,transparent)] sm:p-9">
+            <motion.section {...motionProps(TIMING.form, 0, 18)} className="flex">
+              <div className="flex w-full flex-col justify-center rounded-[2rem] border border-border bg-card p-6 shadow-[0_24px_70px_-40px_color-mix(in_oklch,var(--foreground)_40%,transparent)] sm:p-9">
                 <div className="mb-8 flex items-start gap-3">
                   <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Sparkles className="size-5" aria-hidden="true" /></span>
                   <div><p className="text-xs font-semibold uppercase tracking-[0.15em] text-primary">Step 1 of 1</p><h2 className="mt-1 text-2xl font-semibold tracking-[-0.04em] sm:text-3xl">Create your {role} profile</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">It takes less than a minute. You’ll go straight to your dashboard when it’s ready.</p></div>
@@ -188,8 +187,6 @@ export function RoleOnboarding({ role }: { role: Role }) {
                   </Button>
                   {step && busy && <div role="status" className="flex items-center justify-center gap-2 text-sm text-muted-foreground"><span className="size-2 animate-pulse rounded-full bg-primary motion-reduce:animate-none" aria-hidden="true" />{step}</div>}
                 </form>
-
-                <div className="mt-7 flex items-center justify-center gap-2 border-t border-border pt-6 text-xs text-muted-foreground"><BadgeCheck className="size-4 text-primary" aria-hidden="true" />Secure browser-generated credentials</div>
               </div>
             </motion.section>
           </div>

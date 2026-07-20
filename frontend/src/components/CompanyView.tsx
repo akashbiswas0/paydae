@@ -177,10 +177,7 @@ export function CompanyView({ wallet }: { wallet: StoredWallet }) {
       case "dashboard":
         return (
           <>
-            <PageHeader
-              title="Dashboard"
-              description="Your treasury, invoices awaiting action and recent payments at a glance."
-            />
+            <PageHeader title="Dashboard" />
             {treasury ? (
               <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {treasuryStat}
@@ -226,7 +223,7 @@ export function CompanyView({ wallet }: { wallet: StoredWallet }) {
                     Run payday{paydayTotal ? ` — $${formatMoney(paydayTotal)}` : ""}
                   </Button>
                   <p className="mt-2 text-[13px] text-muted-foreground">
-                    One atomic Canton transaction: every approved invoice paid, treasury debited — or nothing. Signed by your key.
+                    One atomic Canton transaction: every approved invoice paid, treasury debited.
                   </p>
                 </div>
               </SectionCard>
@@ -253,7 +250,7 @@ export function CompanyView({ wallet }: { wallet: StoredWallet }) {
       case "people":
         return (
           <>
-            <PageHeader title="People" description="Send offers to contractors and see who you already work with." />
+            <PageHeader title="People" />
             {sendOfferCard}
             <SectionCard title="Contractor directory">
               {contractors.length ? (
@@ -275,7 +272,7 @@ export function CompanyView({ wallet }: { wallet: StoredWallet }) {
       case "agreements":
         return (
           <>
-            <PageHeader title="Agreements" description="Offers awaiting a contractor countersignature, and active agreements." />
+            <PageHeader title="Agreements" />
             <SectionCard title="Open offers">
               {data.proposals.length ? (
                 data.proposals.map((p) => (
@@ -312,7 +309,7 @@ export function CompanyView({ wallet }: { wallet: StoredWallet }) {
       case "invoices":
         return (
           <>
-            <PageHeader title="Invoices" description="Approve pending invoices; approved ones move to Payday." />
+            <PageHeader title="Invoices" />
             <SectionCard title="Pending approval">
               {data.invoices.length ? (
                 data.invoices.map((inv) => (
@@ -363,7 +360,7 @@ export function CompanyView({ wallet }: { wallet: StoredWallet }) {
       case "payday":
         return (
           <>
-            <PageHeader title="Payday" description="Pay every approved invoice in one atomic Canton transaction." />
+            <PageHeader title="Payday" />
             <SectionCard title="Ready for payday">
               {data.approvedInvoices.length ? (
                 data.approvedInvoices.map((inv) => (
@@ -388,7 +385,7 @@ export function CompanyView({ wallet }: { wallet: StoredWallet }) {
                   Run payday{paydayTotal ? ` — $${formatMoney(paydayTotal)}` : ""}
                 </Button>
                 <p className="mt-2 text-[13px] text-muted-foreground">
-                  One atomic Canton transaction: every approved invoice paid, treasury debited — or nothing. Signed by your key.
+                  One atomic Canton transaction: every approved invoice paid, treasury debited.
                 </p>
               </div>
             </SectionCard>
@@ -413,7 +410,7 @@ export function CompanyView({ wallet }: { wallet: StoredWallet }) {
       case "auditor":
         return (
           <>
-            <PageHeader title="Auditor" description="Give a read-only party visibility of your books — enforced by the ledger." />
+            <PageHeader title="Auditor" />
             <SectionCard title="Designate auditor">
               {currentAuditors.length ? (
                 <p className="flex items-start gap-2 py-2 text-sm">
