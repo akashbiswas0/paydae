@@ -2,7 +2,7 @@
 
 Agreement + invoice + payment as one private, atomic workflow on the
 Canton Network. Payday for every contractor is **one atomic transaction**, and each
-contractor's terms, invoices, and payments are **invisible to everyone else** — not
+contractor's terms, invoices, and payments are **invisible to everyone else**, not
 because the app filters them out, but because Canton's validator never distributes
 those contracts to non stakeholders in the first place.
 
